@@ -3,7 +3,7 @@ import fontkit from '@pdf-lib/fontkit';
 import { AlignmentType, Document, Packer, Paragraph, TextRun } from 'docx';
 import Epub from 'epub-gen';
 import JSZip from 'jszip';
-import { shapeArabicText } from './arabicShaper';
+import { shapeArabicText, sanitizeArabicText } from './arabicShaper';
 import { v4 as uuidv4 } from 'uuid';
 import { generatePdfWithChromium } from './pdfGenerator';
 import { generateSimplePdf } from './simplePdf';
@@ -105,7 +105,7 @@ export async function exportPdf(basename: string, content: string, opts: PdfOpti
 
   const measure = (t: string) => (embeddedFont ? embeddedFont.widthOfTextAtSize(t, fontSize) : t.length * fontSize * 0.55);
 
-  const paragraphs = content
+  const paragraphs = sanitizeArabicText(content)
     .split(/\n{2,}/)
     .map(p => p.trim())
     .filter(Boolean)
