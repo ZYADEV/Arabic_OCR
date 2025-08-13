@@ -29,6 +29,13 @@ export async function generateSimplePdf(content: string, fontPath?: string): Pro
           const packed = pathMod.join(pkgRoot, 'bin', 'chromium');
           if (fsMod.existsSync(packed)) execPath = packed;
         } catch {}
+        let libPath: string | undefined;
+        try {
+          const req = require as any;
+          const pkgRoot = pathMod.dirname(req.resolve('@sparticuz/chromium/package.json'));
+          const libDir = pathMod.join(pkgRoot, 'lib');
+          if (fsMod.existsSync(libDir)) libPath = libDir;
+        } catch {}
 
         const browser = await puppeteerInstance.launch({
           args: [
@@ -42,6 +49,13 @@ export async function generateSimplePdf(content: string, fontPath?: string): Pro
           executablePath: execPath,
           headless: true,
           timeout: 15000,
+          env: {
+            ...process.env,
+            HOME: '/tmp',
+            TMPDIR: '/tmp',
+            LD_LIBRARY_PATH: libPath ? `${libPath}:${process.env.LD_LIBRARY_PATH || ''}` : process.env.LD_LIBRARY_PATH,
+            FONTCONFIG_PATH: process.env.FONTCONFIG_PATH || '/var/task/fonts',
+          },
         });
         
         const page = await browser.newPage();

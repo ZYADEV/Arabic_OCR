@@ -12,7 +12,9 @@
           "node_modules/@sparticuz/chromium/**",
           "node_modules/puppeteer-core/**",
           "node_modules/@puppeteer/browsers/**",
-          "node_modules/ws/**"
+          "node_modules/ws/**",
+          "node_modules/@sparticuz/chromium/bin/**",
+          "node_modules/@sparticuz/chromium/lib/**"
         ]
       }
     }

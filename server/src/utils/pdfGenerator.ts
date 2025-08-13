@@ -47,6 +47,15 @@ export async function generatePdfWithChromium(content: string, fontPath?: string
           if (fsMod.existsSync(packed)) execPath = packed;
         } catch {}
 
+        // Construct environment with library paths for NSS
+        let libPath: string | undefined;
+        try {
+          const req = require as any;
+          const pkgRoot = pathMod.dirname(req.resolve('@sparticuz/chromium/package.json'));
+          const libDir = pathMod.join(pkgRoot, 'lib');
+          if (fsMod.existsSync(libDir)) libPath = libDir;
+        } catch {}
+
         const browser = await puppeteer.launch({
           args: [
             ...chromiumInstance.args,
@@ -67,6 +76,13 @@ export async function generatePdfWithChromium(content: string, fontPath?: string
           pipe: false,
           timeout: 30000,
           protocolTimeout: 30000,
+          env: {
+            ...process.env,
+            HOME: '/tmp',
+            TMPDIR: '/tmp',
+            LD_LIBRARY_PATH: libPath ? `${libPath}:${process.env.LD_LIBRARY_PATH || ''}` : process.env.LD_LIBRARY_PATH,
+            FONTCONFIG_PATH: process.env.FONTCONFIG_PATH || '/var/task/fonts',
+          },
         });
         
         console.log('[pdf-alt] Browser launched successfully, generating PDF...');
