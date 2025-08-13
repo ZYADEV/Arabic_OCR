@@ -5,6 +5,7 @@
       "src": "api/index.ts",
       "use": "@vercel/node",
       "config": {
+        "maxLambdaSize": "50mb",
         "includeFiles": [
           "fonts/**",
           "arabe_community/**",
@@ -18,7 +19,12 @@
   ],
   "routes": [
     { "src": "/(.*)", "dest": "/api/index.ts" }
-  ]
+  ],
+  "functions": {
+    "api/index.ts": {
+      "maxDuration": 60
+    }
+  }
 }
 
 

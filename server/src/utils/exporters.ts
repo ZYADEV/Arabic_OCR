@@ -5,6 +5,7 @@ import Epub from 'epub-gen';
 import JSZip from 'jszip';
 import { v4 as uuidv4 } from 'uuid';
 import { generatePdfWithChromium } from './pdfGenerator';
+import { generateSimplePdf } from './simplePdf';
 
 export type ExportResult = { filename: string; mime: string; base64: string };
 
@@ -72,7 +73,15 @@ export async function exportPdf(basename: string, content: string, opts: PdfOpti
     return { filename, mime: 'application/pdf', base64: Buffer.from(chromiumPdf).toString('base64') };
   }
 
-  console.log('[pdf] Chromium PDF generation failed, falling back to pdf-lib...');
+  console.log('[pdf] Chromium PDF generation failed, trying simple PDF generation...');
+  const simplePdf = await generateSimplePdf(content, opts.fontPath);
+  
+  if (simplePdf) {
+    console.log('[pdf] Simple PDF generation successful');
+    return { filename, mime: 'application/pdf', base64: Buffer.from(simplePdf).toString('base64') };
+  }
+
+  console.log('[pdf] All Chromium approaches failed, falling back to pdf-lib...');
 
   // Fallback: pdf-lib (no complex shaping, basic RTL support only)
   const pdfDoc = await PDFDocument.create();
