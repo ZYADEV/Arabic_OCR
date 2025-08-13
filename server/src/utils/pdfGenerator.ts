@@ -21,13 +21,18 @@ export async function generatePdfWithChromium(content: string, fontPath?: string
         
         // Import chromium
         const chromium = await import('@sparticuz/chromium' as any);
-        const chromiumInstance = chromium.default || chromium;
+        const chromiumInstance = (chromium as any).default || chromium;
+        try {
+          // Ensure correct modes for serverless
+          (chromiumInstance as any).setHeadlessMode = true;
+          (chromiumInstance as any).setGraphicsMode = false;
+        } catch {}
         
         console.log('[pdf-alt] Chromium imported successfully');
         
         // Import puppeteer-core
         const puppeteerCore = await import('puppeteer-core');
-        const puppeteer = puppeteerCore.default || puppeteerCore;
+        const puppeteer = (puppeteerCore as any).default || puppeteerCore;
         
         console.log('[pdf-alt] Attempting browser launch with chromium...');
         
@@ -45,7 +50,7 @@ export async function generatePdfWithChromium(content: string, fontPath?: string
           ],
           defaultViewport: chromiumInstance.defaultViewport,
           executablePath: await chromiumInstance.executablePath(),
-          headless: true,
+          headless: (chromiumInstance as any).headless ?? 'new',
           ignoreDefaultArgs: ['--disable-extensions'],
           // Try to avoid connection issues
           pipe: false,
