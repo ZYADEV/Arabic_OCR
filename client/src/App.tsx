@@ -141,7 +141,8 @@ function App() {
     } catch {}
 
     // Load html2pdf bundle dynamically
-    const html2pdf = await loadHtml2Pdf();
+    let html2pdf: any = null;
+    try { html2pdf = await loadHtml2Pdf(); } catch {}
 
     // Build printable container
     const container = document.createElement('div');
@@ -178,8 +179,16 @@ function App() {
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
 
-    await html2pdf().set(opt).from(container).save();
-    container.remove();
+    try {
+      if (!html2pdf) throw new Error('html2pdf not loaded');
+      await new Promise(r => requestAnimationFrame(r));
+      await html2pdf().set(opt).from(container).save();
+    } catch {
+      // Fallback: open printable window and use native print-to-PDF
+      await exportPdfViaPrint(container.innerHTML, absFontUrl);
+    } finally {
+      container.remove();
+    }
   }
 
   function loadHtml2Pdf(): Promise<any> {
@@ -192,6 +201,29 @@ function App() {
       s.onerror = reject;
       document.head.appendChild(s);
     });
+  }
+
+  async function exportPdfViaPrint(inner: string, fontUrl: string) {
+    const w = window.open('', '_blank');
+    if (!w) return;
+    w.document.open();
+    w.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
+      <style>
+        @page { size: A4; margin: 20mm; }
+        @font-face { font-family: 'UserFont'; src: url(${fontUrl}) format('truetype'); font-weight: normal; font-style: normal; font-display: swap; }
+        html, body { direction: rtl; text-align: right; font-family: 'UserFont', 'Amiri', 'Cairo', serif; }
+        h1{font-size:24px;font-weight:700;margin:0 0 12px 0}
+        h2{font-size:18px;font-weight:700;margin:12px 0}
+        p{font-size:16px;line-height:1.9;margin:8px 0;text-align:justify;text-align-last:right}
+      </style>
+    </head><body>${inner}</body></html>`);
+    w.document.close();
+    try {
+      // Wait a bit for fonts to load before printing
+      await new Promise(r => setTimeout(r, 500));
+      w.focus();
+      w.print();
+    } catch {}
   }
 
   const [dark, setDark] = useState<boolean>(() => localStorage.getItem('theme') === 'dark');
