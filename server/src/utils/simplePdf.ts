@@ -14,12 +14,22 @@ export async function generateSimplePdf(content: string, fontPath?: string): Pro
       try {
         const chromium = await import('@sparticuz/chromium' as any);
         const puppeteer = await import('puppeteer-core');
+        const pathMod = await import('path');
+        const fsMod = await import('fs');
         
-        const chromiumInstance = chromium.default || chromium;
-        const puppeteerInstance = puppeteer.default || puppeteer;
+        const chromiumInstance = (chromium as any).default || chromium;
+        const puppeteerInstance = (puppeteer as any).default || puppeteer;
         
         console.log('[simple-pdf] Launching browser with minimal options...');
         
+        let execPath = await chromiumInstance.executablePath();
+        try {
+          const req = require as any;
+          const pkgRoot = pathMod.dirname(req.resolve('@sparticuz/chromium/package.json'));
+          const packed = pathMod.join(pkgRoot, 'bin', 'chromium');
+          if (fsMod.existsSync(packed)) execPath = packed;
+        } catch {}
+
         const browser = await puppeteerInstance.launch({
           args: [
             '--no-sandbox',
@@ -29,7 +39,7 @@ export async function generateSimplePdf(content: string, fontPath?: string): Pro
             '--single-process',
             '--disable-web-security',
           ],
-          executablePath: await chromiumInstance.executablePath(),
+          executablePath: execPath,
           headless: true,
           timeout: 15000,
         });

@@ -22,6 +22,8 @@ export async function generatePdfWithChromium(content: string, fontPath?: string
         // Import chromium
         const chromium = await import('@sparticuz/chromium' as any);
         const chromiumInstance = (chromium as any).default || chromium;
+        const pathMod = await import('path');
+        const fsMod = await import('fs');
         try {
           // Ensure correct modes for serverless
           (chromiumInstance as any).setHeadlessMode = true;
@@ -36,6 +38,15 @@ export async function generatePdfWithChromium(content: string, fontPath?: string
         
         console.log('[pdf-alt] Attempting browser launch with chromium...');
         
+        // Prefer a packaged chromium binary inside node_modules to avoid dynamic extraction to /tmp
+        let execPath = await chromiumInstance.executablePath();
+        try {
+          const req = require as any;
+          const pkgRoot = pathMod.dirname(req.resolve('@sparticuz/chromium/package.json'));
+          const packed = pathMod.join(pkgRoot, 'bin', 'chromium');
+          if (fsMod.existsSync(packed)) execPath = packed;
+        } catch {}
+
         const browser = await puppeteer.launch({
           args: [
             ...chromiumInstance.args,
@@ -49,7 +60,7 @@ export async function generatePdfWithChromium(content: string, fontPath?: string
             '--disable-features=VizDisplayCompositor'
           ],
           defaultViewport: chromiumInstance.defaultViewport,
-          executablePath: await chromiumInstance.executablePath(),
+          executablePath: execPath,
           headless: (chromiumInstance as any).headless ?? 'new',
           ignoreDefaultArgs: ['--disable-extensions'],
           // Try to avoid connection issues
