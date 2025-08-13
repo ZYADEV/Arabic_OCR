@@ -9,7 +9,8 @@
           "fonts/**",
           "arabe_community/**",
           "node_modules/@sparticuz/chromium/**",
-          "node_modules/puppeteer-core/**"
+          "node_modules/puppeteer-core/**",
+          "node_modules/@puppeteer/browsers/**"
         ]
       }
     }

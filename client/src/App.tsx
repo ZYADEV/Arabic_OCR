@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { UploadIcon, OCRIcon, DownloadIcon, TwitterIcon, GitHubIcon, TelegramIcon, YouTubeIcon, SunIcon, MoonIcon } from './components/Icons';
+import logo from './assets/logo.jpg';
 
 interface OCRItem {
   filename: string;
@@ -300,7 +301,7 @@ function App() {
               <h1 className="text-2xl font-bold">هدية من</h1>
               <div className="w-16 h-16 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-purple-600 p-1">
                 <img 
-                  src={new URL('/assets/logo.jpg', window.location.origin).toString()}
+                  src={logo}
                   alt="Logo" 
                   className="w-full h-full rounded-full object-cover"
                 />

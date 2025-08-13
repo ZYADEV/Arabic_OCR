@@ -81,9 +81,17 @@ export async function exportPdf(basename: string, content: string, opts: PdfOpti
             })())
           )
         : null;
-      const puppeteer = isServerless
-        ? (await dynamicImport('puppeteer-core')).default
-        : (await dynamicImport('puppeteer')).default;
+      let puppeteer: any;
+      if (isServerless) {
+        try { puppeteer = (await dynamicImport('puppeteer-core')).default; }
+        catch {
+          // try cjs
+          puppeteer = (await dynamicImport('puppeteer-core/lib/cjs/puppeteer/node/Puppeteer.js')).default || (await dynamicImport('puppeteer-core/lib/cjs/puppeteer/node/PuppeteerNode.js')).default;
+        }
+      } else {
+        try { puppeteer = (await dynamicImport('puppeteer')).default; }
+        catch { puppeteer = (await dynamicImport('puppeteer/lib/cjs/puppeteer/node/Puppeteer.js')).default; }
+      }
       const fontPath = opts.fontPath;
       
       console.log(`[pdf] Using font path: ${fontPath}`);
