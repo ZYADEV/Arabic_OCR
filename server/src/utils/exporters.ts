@@ -7,6 +7,7 @@ import { shapeArabicText } from './arabicShaper';
 import { v4 as uuidv4 } from 'uuid';
 import { generatePdfWithChromium } from './pdfGenerator';
 import { generateSimplePdf } from './simplePdf';
+import axios from 'axios';
 
 export type ExportResult = { filename: string; mime: string; base64: string };
 
@@ -65,6 +66,22 @@ interface PdfOptions { fontPath?: string }
 export async function exportPdf(basename: string, content: string, opts: PdfOptions = {}): Promise<ExportResult> {
   const filename = `${basename}-${uuidv4()}.pdf`;
 
+  // Preferred: remote headless Chrome service (e.g., Browserless) if configured
+  const browserlessUrl = process.env.BROWSERLESS_URL; // e.g., https://chrome.browserless.io/pdf?token=XXXX
+  const publicBase = process.env.PUBLIC_BASE_URL || '';
+  if (browserlessUrl) {
+    try {
+      const fontUrl = opts.fontPath && publicBase ? `${publicBase}${opts.fontPath.replace(/^(?:https?:)?\/?\//,'')}` : undefined;
+      const html = buildRtlHtml(content, fontUrl);
+      const { data } = await axios.post(browserlessUrl, { html }, { responseType: 'arraybuffer', timeout: 30000 });
+      if (data && (data as any).byteLength) {
+        return { filename, mime: 'application/pdf', base64: Buffer.from(data as any).toString('base64') };
+      }
+    } catch (e) {
+      console.warn('[pdf] Browserless route failed, falling back:', (e as any)?.message);
+    }
+  }
+
   // Try the alternative Chromium-based PDF generation first
   console.log('[pdf] Attempting Chromium-based PDF generation...');
   const chromiumPdf = await generatePdfWithChromium(content, opts.fontPath);
@@ -84,12 +101,12 @@ export async function exportPdf(basename: string, content: string, opts: PdfOpti
 
   console.log('[pdf] All Chromium approaches failed, falling back to pdf-lib...');
 
-  // Fallback: pdf-lib with manual Arabic shaping and simple wrapping/justification
+  // Fallback: pdf-lib (no complex shaping, basic RTL support only)
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit as any);
-  const baseFontSize = 14;
-  const marginX = 56;
-  const marginY = 56;
+  const fontSize = 12;
+  const marginX = 48;
+  const marginY = 48;
   let embeddedFont: any = null;
   const fontPath = opts.fontPath || process.env.ARABIC_TTF_PATH;
   if (fontPath) {
@@ -101,73 +118,76 @@ export async function exportPdf(basename: string, content: string, opts: PdfOpti
       console.warn('[pdf] Arabic font load failed, continuing with fallback shaping:', e);
     }
   }
+  // Extra shaping for Arabic in the pdf-lib fallback
+  let shape: ((s: string) => string) | null = null;
   let page = pdfDoc.addPage();
   let { width, height } = page.getSize();
   const maxLineWidth = width - marginX * 2;
-  const measure = (t: string, size: number) => (embeddedFont ? embeddedFont.widthOfTextAtSize(t, size) : t.length * size * 0.55);
-
-  function drawParagraph(text: string, style: 'h1' | 'h2' | 'p') {
-    const size = style === 'h1' ? 22 : style === 'h2' ? 18 : baseFontSize;
-    const tokens = text.split(/\s+/).filter(Boolean).map(t => shapeArabicText(t));
-    let line: string[] = [];
-    let lineWidth = 0;
-    const spaceWidth = measure(' ', size);
-    for (const token of tokens) {
-      const tokenWidth = measure(token, size);
-      const add = line.length ? spaceWidth : 0;
-      if (lineWidth + add + tokenWidth <= maxLineWidth) {
-        line.push(token);
-        lineWidth += add + tokenWidth;
-      } else {
-        flushLine(false);
-        line = [token];
-        lineWidth = tokenWidth;
+  const sanitized = content.replace(/^#\s.+$/gm, '').replace(/\n{3,}/g, '\n\n');
+  const linesRaw = sanitized.split('\n');
+  const wrapped: string[] = [];
+  const measure = (t: string) => (embeddedFont ? embeddedFont.widthOfTextAtSize(t, fontSize) : t.length * fontSize * 0.55);
+  for (const raw of linesRaw) {
+    if (!raw.trim()) {
+      wrapped.push('');
+      continue;
+    }
+    if (measure(raw) <= maxLineWidth) {
+      wrapped.push(raw);
+      continue;
+    }
+    let current = '';
+    for (const word of raw.split(/\s+/)) {
+      const next = current ? current + ' ' + word : word;
+      if (measure(next) <= maxLineWidth) current = next;
+      else {
+        if (current) wrapped.push(current);
+        current = word;
       }
     }
-    flushLine(true);
-    y -= size * 0.4; // paragraph gap
-
-    function flushLine(isLast: boolean) {
-      if (y < marginY) {
-        page = pdfDoc.addPage();
-        ({ width, height } = page.getSize());
-        y = height - marginY;
-      }
-      if (!line.length) return;
-      // Right aligned start x
-      let xCursor = width - marginX - lineWidth;
-      // Justify if not last
-      const gaps = Math.max(line.length - 1, 1);
-      let extra = 0;
-      if (!isLast && gaps > 0) {
-        const currentWidth = lineWidth;
-        const remaining = Math.max(maxLineWidth - currentWidth, 0);
-        extra = remaining / gaps;
-        xCursor = width - marginX - maxLineWidth;
-      }
-      for (let i = 0; i < line.length; i++) {
-        const w = line[i];
-        const wWidth = measure(w, size);
-        try {
-          page.drawText(w, { x: xCursor, y, size, font: embeddedFont ?? undefined, color: rgb(0, 0, 0) });
-        } catch {}
-        xCursor += wWidth + spaceWidth + extra;
-      }
-      y -= size + 4;
-    }
+    if (current) wrapped.push(current);
   }
-
-  // Parse content into blocks and render with sizes
-  const blocks = content.split(/\n{2,}/).map(b => b.trim()).filter(Boolean);
   let y = height - marginY;
-  for (const b of blocks) {
-    const single = b.replace(/\n+/g, ' ').trim();
-    if (/^##\s+/.test(single)) drawParagraph(single.replace(/^##\s+/, ''), 'h2');
-    else if (/^#\s+/.test(single)) drawParagraph(single.replace(/^#\s+/, ''), 'h1');
-    else drawParagraph(single, 'p');
+  for (const line of wrapped) {
+    if (y < marginY) {
+      page = pdfDoc.addPage();
+      ({ width, height } = page.getSize());
+      y = height - marginY;
+    }
+    const hasArabic = /[\u0600-\u06FF]/.test(line);
+    const text = hasArabic ? shapeArabicText(line) : line;
+    const lineWidth = embeddedFont ? embeddedFont.widthOfTextAtSize(text, fontSize) : text.length * fontSize * 0.55;
+    const x = hasArabic ? width - marginX - lineWidth : marginX;
+    try {
+      page.drawText(text, { x, y, size: fontSize, font: embeddedFont ?? undefined, color: rgb(0, 0, 0) });
+    } catch (e) {
+      console.warn('[pdf] drawText error, skipping line:', e);
+    }
+    y -= fontSize + 4;
   }
   const pdfBytes = await pdfDoc.save();
   return { filename, mime: 'application/pdf', base64: Buffer.from(pdfBytes).toString('base64') };
+}
+
+function buildRtlHtml(content: string, absFontUrl?: string) {
+  const blocks = content.split(/\n{2,}/).map(b => b.trim()).filter(Boolean);
+  const nodes = blocks.map(b => {
+    const t = b.replace(/\n+/g, ' ').trim();
+    if (/^##\s+/.test(t)) return `<h2>${t.replace(/^##\s+/, '')}</h2>`;
+    if (/^#\s+/.test(t)) return `<h1>${t.replace(/^#\s+/, '')}</h1>`;
+    return `<p>${t}</p>`;
+  }).join('\n');
+  const fontFace = absFontUrl ? `@font-face{font-family:"UserFont";src:url('${absFontUrl}') format('truetype');font-weight:normal;font-style:normal}` : '';
+  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
+  <style>
+    ${fontFace}
+    html,body{margin:0;padding:0;direction:rtl}
+    body{font-family:${absFontUrl ? `'UserFont',` : ''}'Amiri','Cairo',serif;text-align:right}
+    h1{font-size:22px;font-weight:700;margin:12px 0}
+    h2{font-size:18px;font-weight:700;margin:10px 0}
+    p{font-size:14px;line-height:1.9;margin:8px 0;text-align:justify;text-align-last:right}
+    @page{size:A4;margin:20mm}
+  </style></head><body>${nodes}</body></html>`;
 }
 
 export async function exportEpub(
@@ -323,7 +343,7 @@ export async function exportEpub(
   } else {
     option = {
       title: ((content.split(/\n+/).find(l => /(الفصل|الجزء|الباب)/.test(l)) || content.split(/\n+/).find(l => l.trim()) || 'كتاب')).trim(),
-    author: 'OCR Arabic App',
+      author: 'OCR Arabic App',
       content: [{ title: 'المحتوى', data: html }],
       css,
       output: tmpFile,
@@ -337,9 +357,9 @@ export async function exportEpub(
     await new Promise<void>((resolve, reject) => {
       new (Epub as any)(option).promise.then(resolve).catch(reject);
     });
-  const buf = fsNative.readFileSync(tmpFile);
-  try { fsNative.unlinkSync(tmpFile); } catch {}
-  return { filename, mime: 'application/epub+zip', base64: Buffer.from(buf).toString('base64') };
+    const buf = fsNative.readFileSync(tmpFile);
+    try { fsNative.unlinkSync(tmpFile); } catch {}
+    return { filename, mime: 'application/epub+zip', base64: Buffer.from(buf).toString('base64') };
   } catch (err) {
     console.warn('[epub] epub-gen failed, trying manual ZIP packaging');
     const zip = new JSZip();

@@ -14,6 +14,14 @@ export function exportRouter(fontsDir?: string) {
       if (!content) return res.status(400).json({ error: 'Missing content' });
 
       let fontPath: string | undefined;
+      let publicBaseFromReq: string | undefined;
+      // Compute public base URL from request (works on Vercel behind proxies)
+      try {
+        const xfProto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'https';
+        const xfHost = (req.headers['x-forwarded-host'] as string) || req.get('host') || '';
+        if (xfHost) publicBaseFromReq = `${xfProto}://${xfHost}`;
+        if (publicBaseFromReq && !process.env.PUBLIC_BASE_URL) process.env.PUBLIC_BASE_URL = publicBaseFromReq;
+      } catch {}
       if (font && fontsDir) {
         // font expected as relative path like /fonts/Family/File.ttf
         // sanitize: ensure resolved path is inside fontsDir

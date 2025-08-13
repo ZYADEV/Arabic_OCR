@@ -20,6 +20,7 @@ function App() {
   const [format, setFormat] = useState<'txt' | 'docx' | 'pdf' | 'epub'>('txt');
   const [fonts, setFonts] = useState<{ family: string; regular: string | null; variants: string[] }[]>([]);
   const [fontModal, setFontModal] = useState(false);
+  const [generating, setGenerating] = useState(false);
   // selectedFont is the chosen TTF path under /fonts. We persist to localStorage and also apply to UI via a dynamic @font-face.
   const [selectedFont, setSelectedFont] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -98,8 +99,30 @@ function App() {
     try {
       // Client-side HTML → PDF (avoids serverless headless browser limits)
       if (format === 'pdf') {
-        await exportPdfClient(mergedText, selectedFont);
-        return;
+        const useServer = true; // prefer server if BROWSERLESS_URL is configured
+        if (useServer) {
+          setGenerating(true);
+          const { data } = await axios.post('/api/export/generate', {
+            filename: 'ocr-ar',
+            format: 'pdf',
+            content: mergedText,
+            font: selectedFont || undefined
+          });
+          setGenerating(false);
+          const { filename, mime, base64 } = data || {};
+          if (!base64) throw new Error('No PDF data');
+          const byteChars = atob(base64);
+          const bytes = new Uint8Array(byteChars.length);
+          for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
+          const blob = new Blob([bytes], { type: mime || 'application/pdf' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = filename || 'ocr-ar.pdf'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+          return;
+        } else {
+          await exportPdfClient(mergedText, selectedFont);
+          return;
+        }
       }
       const { data } = await axios.post('/api/export/generate', {
         filename: 'ocr-ar',
@@ -124,6 +147,7 @@ function App() {
     } catch (e: any) {
       console.error(e);
       alert('فشل التصدير: ' + (e?.message || ''));
+      setGenerating(false);
     }
   };
 
@@ -282,6 +306,14 @@ function App() {
       </header>
 
       <main className="max-w-6xl mx-auto flex-1 px-4 py-8">
+        {generating && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
+            <div className="glass rounded-xl p-6 text-center">
+              <div className="mb-3 text-lg">جاري تجهيز ملف PDF…</div>
+              <div className="w-64 h-2 bg-neutral-300/40 rounded overflow-hidden"><div className="h-full bg-blue-600 animate-pulse" /></div>
+            </div>
+          </div>
+        )}
         <section onDrop={onDrop} onDragOver={onDragOver} className="rounded-2xl p-8 text-center glass border-2 border-dashed border-[var(--card-border)]">
           <div className="flex flex-col items-center gap-4">
             <UploadIcon className="w-12 h-12 text-neutral-500" />
