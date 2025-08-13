@@ -148,17 +148,28 @@ function App() {
       pdfMake.vfs['UserFont.ttf'] = fontB64;
       pdfMake.fonts = { UserFont: { normal: 'UserFont.ttf', bold: 'UserFont.ttf', italics: 'UserFont.ttf', bolditalics: 'UserFont.ttf' } };
 
-      const paragraphs = content
+      const blocks = content
         .split(/\n{2,}/)
         .map(p => p.trim())
-        .filter(Boolean)
-        .map(p => ({ text: p.replace(/\n+/g, ' '), alignment: 'justify', margin: [0, 4, 0, 0] }));
+        .filter(Boolean);
+
+      const nodes: any[] = [];
+      for (const b of blocks) {
+        const single = b.replace(/\n+/g, ' ').trim();
+        if (/^##\s+/.test(single)) {
+          nodes.push({ text: single.replace(/^##\s+/, ''), fontSize: 18, bold: true, alignment: 'right', margin: [0, 6, 0, 4], rtl: true });
+        } else if (/^#\s+/.test(single)) {
+          nodes.push({ text: single.replace(/^#\s+/, ''), fontSize: 22, bold: true, alignment: 'right', margin: [0, 10, 0, 6], rtl: true });
+        } else {
+          nodes.push({ text: single, fontSize: 14, alignment: 'justify', margin: [0, 2, 0, 0], rtl: true });
+        }
+      }
 
       const doc: any = {
         pageSize: 'A4',
         pageMargins: [28, 28, 28, 28],
-        defaultStyle: { font: 'UserFont', fontSize: 16, alignment: 'right' },
-        content: paragraphs.length ? paragraphs : [{ text: ' ' }],
+        defaultStyle: { font: 'UserFont', fontSize: 14, alignment: 'right' },
+        content: nodes.length ? nodes : [{ text: ' ', rtl: true }],
         rtl: true
       };
       pdfMake.createPdf(doc).download('ocr-ar.pdf');
@@ -425,7 +436,7 @@ function App() {
               </div>
               <div className="flex items-center gap-3">
                 <a 
-                  href="twitter.com/python_ar" 
+                  href="x.com/python_ar" 
                   target="_blank" 
                   className="p-2 rounded-full glass hover:scale-110 transition-transform"
                 >
