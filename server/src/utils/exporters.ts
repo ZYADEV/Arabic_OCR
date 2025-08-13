@@ -62,15 +62,17 @@ export async function exportDocx(
   };
 }
 
-interface PdfOptions { fontPath?: string; fontUrl?: string }
+interface PdfOptions { fontPath?: string }
 export async function exportPdf(basename: string, content: string, opts: PdfOptions = {}): Promise<ExportResult> {
   const filename = `${basename}-${uuidv4()}.pdf`;
 
   // Preferred: remote headless Chrome service (e.g., Browserless) if configured
-  const browserlessUrl = process.env.BROWSERLESS_URL; // e.g., https://production-sfo.browserless.io/pdf?token=XXXX
+  const browserlessUrl = process.env.BROWSERLESS_URL; // e.g., https://chrome.browserless.io/pdf?token=XXXX
+  const publicBase = process.env.PUBLIC_BASE_URL || '';
   if (browserlessUrl) {
     try {
-      const html = buildRtlHtml(content, opts.fontUrl);
+      const fontUrl = opts.fontPath && publicBase ? `${publicBase}${opts.fontPath.replace(/^(?:https?:)?\/?\//,'')}` : undefined;
+      const html = buildRtlHtml(content, fontUrl);
       const { data } = await axios.post(browserlessUrl, { html }, { responseType: 'arraybuffer', timeout: 30000 });
       if (data && (data as any).byteLength) {
         return { filename, mime: 'application/pdf', base64: Buffer.from(data as any).toString('base64') };
@@ -169,12 +171,10 @@ export async function exportPdf(basename: string, content: string, opts: PdfOpti
 
 function buildRtlHtml(content: string, absFontUrl?: string) {
   const blocks = content.split(/\n{2,}/).map(b => b.trim()).filter(Boolean);
-  const nodes = blocks.map((b, i) => {
+  const nodes = blocks.map(b => {
     const t = b.replace(/\n+/g, ' ').trim();
     if (/^##\s+/.test(t)) return `<h2>${t.replace(/^##\s+/, '')}</h2>`;
     if (/^#\s+/.test(t)) return `<h1>${t.replace(/^#\s+/, '')}</h1>`;
-    if (i === 0 && t.length <= 60) return `<h1>${t}</h1>`;
-    if (i === 1 && t.length <= 60) return `<h2>${t}</h2>`;
     return `<p>${t}</p>`;
   }).join('\n');
   const fontFace = absFontUrl ? `@font-face{font-family:"UserFont";src:url('${absFontUrl}') format('truetype');font-weight:normal;font-style:normal}` : '';
