@@ -14,7 +14,7 @@ const app = express();
 // Enhanced CORS for production
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://your-vercel-domain.vercel.app'] 
+    ? ['https://ar-ocr.vercel.app/'] 
     : true,
   credentials: true
 }));
