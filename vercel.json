@@ -14,9 +14,11 @@
     }
   ],
   "routes": [
+    { "src": "/api/health", "dest": "/api/health.ts" },
+    { "src": "/api$", "dest": "/api/index.ts" },
     {
       "src": "/api/(.*)",
-      "dest": "/api/$1"
+      "dest": "/api/$1.ts"
     },
     {
       "src": "/assets/(.*)",
