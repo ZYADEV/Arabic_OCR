@@ -103,11 +103,9 @@ export async function exportPdf(basename: string, content: string, opts: PdfOpti
   // Extra shaping for Arabic in the pdf-lib fallback
   let shape: ((s: string) => string) | null = null;
   try {
-    const reshaper = await import('arabic-persian-reshaper');
     const bidi = await import('bidi-js');
     shape = (s: string) => {
-      const reshaped = (reshaper as any).reshape(s);
-      const bidiResult = (bidi as any).bidi(reshaped, { isolate: true });
+      const bidiResult = (bidi as any).bidi(s, { isolate: true });
       return bidiResult.text;
     };
   } catch {}

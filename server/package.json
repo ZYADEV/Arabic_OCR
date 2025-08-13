@@ -25,7 +25,6 @@
     "@sparticuz/chromium": "^131.0.0",
     "puppeteer": "^21.3.8",
     "puppeteer-core": "^21.3.8",
-    "arabic-persian-reshaper": "^3.0.2",
     "bidi-js": "^5.1.0",
     "ws": "^8.18.0",
     "uuid": "^9.0.1",
