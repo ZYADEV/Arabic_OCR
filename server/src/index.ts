@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
+import os from 'os';
 import fs from 'fs';
 import multer from 'multer';
 import { ocrRouter } from './routes/ocr';
@@ -24,9 +25,13 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // __dirname available under CommonJS transpilation.
 
-// Use ephemeral /tmp on Vercel, persistent folder locally
-const UPLOAD_DIR = process.env.UPLOAD_DIR || (process.env.VERCEL ? '/tmp/uploads' : 'uploads');
-const absUpload = path.join(__dirname, '..', UPLOAD_DIR);
+// Use ephemeral tmp on serverless (Vercel) and persistent folder locally
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_REGION || process.env.LAMBDA_TASK_ROOT);
+const absUpload = process.env.UPLOAD_DIR
+  ? path.resolve(process.env.UPLOAD_DIR)
+  : isServerless
+    ? path.join(os.tmpdir(), 'uploads')
+    : path.join(__dirname, '..', 'uploads');
 
 // Resolve fonts directory safely for serverless (read-only) runtime
 const FONTS_DIR = process.env.VERCEL
@@ -34,7 +39,11 @@ const FONTS_DIR = process.env.VERCEL
   : path.join(__dirname, '..', 'fonts');
 
 // Create folders only when writable (i.e., not on Vercel read-only FS)
-if (!fs.existsSync(absUpload)) fs.mkdirSync(absUpload, { recursive: true });
+try {
+  if (!fs.existsSync(absUpload)) fs.mkdirSync(absUpload, { recursive: true });
+} catch {
+  // ignore on read-only filesystems
+}
 if (!process.env.VERCEL && !fs.existsSync(FONTS_DIR)) fs.mkdirSync(FONTS_DIR, { recursive: true });
 
 // Static serve uploads for debugging (optional)
@@ -55,6 +64,7 @@ app.use('/api/ocr', ocrRouter(absUpload));
 // Fonts listing endpoint
 app.get('/api/fonts', (_req, res) => {
   try {
+    if (!fs.existsSync(FONTS_DIR)) return res.json({ fonts: [] });
     const families = fs.readdirSync(FONTS_DIR).filter(d => {
       try { return fs.statSync(path.join(FONTS_DIR, d)).isDirectory(); } catch { return false; }
     });
