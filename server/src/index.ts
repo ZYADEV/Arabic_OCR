@@ -34,9 +34,17 @@ const absUpload = process.env.UPLOAD_DIR
     : path.join(__dirname, '..', 'uploads');
 
 // Resolve fonts directory safely for serverless (read-only) runtime
-const FONTS_DIR = process.env.VERCEL
-  ? path.resolve(process.cwd(), 'fonts')
-  : path.join(__dirname, '..', 'fonts');
+// On Vercel, bundling may nest files under "server/". Probe common locations.
+const fontCandidates = process.env.VERCEL
+  ? [
+      path.resolve(process.cwd(), 'fonts'),
+      path.resolve(process.cwd(), 'server', 'fonts'),
+      path.join(__dirname, '..', 'fonts')
+    ]
+  : [path.join(__dirname, '..', 'fonts')];
+const FONTS_DIR = fontCandidates.find(p => {
+  try { return fs.existsSync(p); } catch { return false; }
+}) || fontCandidates[0];
 
 // Create folders only when writable (i.e., not on Vercel read-only FS)
 try {
