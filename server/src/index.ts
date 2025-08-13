@@ -27,11 +27,10 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Use ephemeral tmp on serverless (Vercel) and persistent folder locally
 const isServerless = Boolean(process.env.VERCEL || process.env.AWS_REGION || process.env.LAMBDA_TASK_ROOT);
-const absUpload = process.env.UPLOAD_DIR
-  ? path.resolve(process.env.UPLOAD_DIR)
-  : isServerless
-    ? path.join(os.tmpdir(), 'uploads')
-    : path.join(__dirname, '..', 'uploads');
+// On serverless, always force tmp dir regardless of UPLOAD_DIR env to avoid read-only FS
+const absUpload = isServerless
+  ? path.join(os.tmpdir(), 'uploads')
+  : (process.env.UPLOAD_DIR ? path.resolve(process.env.UPLOAD_DIR) : path.join(__dirname, '..', 'uploads'));
 
 // Resolve fonts directory safely for serverless (read-only) runtime
 // On Vercel, bundling may nest files under "server/". Probe common locations.

@@ -21,6 +21,12 @@ export function ocrRouter(uploadDir: string) {
   const router = express.Router();
   const upload = multer({ storage: storage(uploadDir), limits: { fileSize: 25 * 1024 * 1024 } });
 
+  // Ensure upload directory exists at runtime (especially important on serverless tmp)
+  try {
+    const fs = require('fs') as typeof import('fs');
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+  } catch {}
+
   // Single or batch
   router.post('/upload', upload.array('files', 20), async (req, res) => {
     try {
