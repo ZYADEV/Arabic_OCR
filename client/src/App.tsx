@@ -164,15 +164,29 @@ function App() {
           nodes.push({ text: single, fontSize: 14, alignment: 'justify', margin: [0, 2, 0, 0], rtl: true });
         }
       }
+      if (!nodes.length && content.trim()) {
+        nodes.push({ text: content.trim().replace(/\n+/g, ' '), fontSize: 14, alignment: 'justify', margin: [0,2,0,0], rtl: true });
+      }
 
       const doc: any = {
         pageSize: 'A4',
         pageMargins: [28, 28, 28, 28],
         defaultStyle: { font: 'UserFont', fontSize: 14, alignment: 'right' },
-        content: nodes.length ? nodes : [{ text: ' ', rtl: true }],
+        content: nodes,
         rtl: true
       };
-      pdfMake.createPdf(doc).download('ocr-ar.pdf');
+      const pdf = pdfMake.createPdf(doc);
+      pdf.getBuffer((buf: any) => {
+        const blob = new Blob([buf], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'ocr-ar.pdf';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      });
       return;
     } catch {}
 
@@ -436,14 +450,14 @@ function App() {
               </div>
               <div className="flex items-center gap-3">
                 <a 
-                  href="x.com/python_ar" 
+                  href="https://x.com/python_ar" 
                   target="_blank" 
                   className="p-2 rounded-full glass hover:scale-110 transition-transform"
                 >
                   <TwitterIcon className="w-5 h-5" />
                 </a>
                 <a 
-                  href="t.me/python4arabs" 
+                  href="https://t.me/python4arabs" 
                   target="_blank" 
                   className="p-2 rounded-full glass hover:scale-110 transition-transform"
                 >
