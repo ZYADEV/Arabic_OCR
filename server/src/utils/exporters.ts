@@ -62,17 +62,15 @@ export async function exportDocx(
   };
 }
 
-interface PdfOptions { fontPath?: string }
+interface PdfOptions { fontPath?: string; fontUrl?: string }
 export async function exportPdf(basename: string, content: string, opts: PdfOptions = {}): Promise<ExportResult> {
   const filename = `${basename}-${uuidv4()}.pdf`;
 
   // Preferred: remote headless Chrome service (e.g., Browserless) if configured
   const browserlessUrl = process.env.BROWSERLESS_URL; // e.g., https://production-sfo.browserless.io/pdf?token=XXXX
-  const publicBase = process.env.PUBLIC_BASE_URL || '';
   if (browserlessUrl) {
     try {
-      const fontUrl = opts.fontPath && publicBase ? `${publicBase}${opts.fontPath}` : undefined;
-      const html = buildRtlHtmlStrict(content, fontUrl);
+      const html = buildRtlHtml(content, opts.fontUrl);
       const { data } = await axios.post(browserlessUrl, { html }, { responseType: 'arraybuffer', timeout: 30000 });
       if (data && (data as any).byteLength) {
         return { filename, mime: 'application/pdf', base64: Buffer.from(data as any).toString('base64') };
@@ -169,12 +167,14 @@ export async function exportPdf(basename: string, content: string, opts: PdfOpti
   return { filename, mime: 'application/pdf', base64: Buffer.from(pdfBytes).toString('base64') };
 }
 
-function buildRtlHtmlStrict(content: string, absFontUrl?: string) {
+function buildRtlHtml(content: string, absFontUrl?: string) {
   const blocks = content.split(/\n{2,}/).map(b => b.trim()).filter(Boolean);
-  const nodes = blocks.map(b => {
+  const nodes = blocks.map((b, i) => {
     const t = b.replace(/\n+/g, ' ').trim();
     if (/^##\s+/.test(t)) return `<h2>${t.replace(/^##\s+/, '')}</h2>`;
     if (/^#\s+/.test(t)) return `<h1>${t.replace(/^#\s+/, '')}</h1>`;
+    if (i === 0 && t.length <= 60) return `<h1>${t}</h1>`;
+    if (i === 1 && t.length <= 60) return `<h2>${t}</h2>`;
     return `<p>${t}</p>`;
   }).join('\n');
   const fontFace = absFontUrl ? `@font-face{font-family:"UserFont";src:url('${absFontUrl}') format('truetype');font-weight:normal;font-style:normal}` : '';
@@ -183,8 +183,8 @@ function buildRtlHtmlStrict(content: string, absFontUrl?: string) {
     ${fontFace}
     html,body{margin:0;padding:0;direction:rtl}
     body{font-family:${absFontUrl ? `'UserFont',` : ''}'Amiri','Cairo',serif;text-align:right}
-    h1{font-size:22px;font-weight:700;margin:12px 0;text-align:right}
-    h2{font-size:18px;font-weight:700;margin:10px 0;text-align:right}
+    h1{font-size:22px;font-weight:700;margin:12px 0}
+    h2{font-size:18px;font-weight:700;margin:10px 0}
     p{font-size:14px;line-height:1.9;margin:8px 0;text-align:justify;text-align-last:right}
     @page{size:A4;margin:20mm}
   </style></head><body>${nodes}</body></html>`;
@@ -343,7 +343,7 @@ export async function exportEpub(
   } else {
     option = {
       title: ((content.split(/\n+/).find(l => /(الفصل|الجزء|الباب)/.test(l)) || content.split(/\n+/).find(l => l.trim()) || 'كتاب')).trim(),
-      author: 'OCR Arabic App',
+    author: 'OCR Arabic App',
       content: [{ title: 'المحتوى', data: html }],
       css,
       output: tmpFile,
@@ -357,9 +357,9 @@ export async function exportEpub(
     await new Promise<void>((resolve, reject) => {
       new (Epub as any)(option).promise.then(resolve).catch(reject);
     });
-    const buf = fsNative.readFileSync(tmpFile);
-    try { fsNative.unlinkSync(tmpFile); } catch {}
-    return { filename, mime: 'application/epub+zip', base64: Buffer.from(buf).toString('base64') };
+  const buf = fsNative.readFileSync(tmpFile);
+  try { fsNative.unlinkSync(tmpFile); } catch {}
+  return { filename, mime: 'application/epub+zip', base64: Buffer.from(buf).toString('base64') };
   } catch (err) {
     console.warn('[epub] epub-gen failed, trying manual ZIP packaging');
     const zip = new JSZip();

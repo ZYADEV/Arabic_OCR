@@ -15,6 +15,7 @@ export function exportRouter(fontsDir?: string) {
 
       let fontPath: string | undefined;
       let publicBaseFromReq: string | undefined;
+      let fontUrl: string | undefined;
       // Compute public base URL from request (works on Vercel behind proxies)
       try {
         const xfProto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'https';
@@ -29,6 +30,7 @@ export function exportRouter(fontsDir?: string) {
         const abs = path.join(fontsDir, rel);
         if (abs.startsWith(fontsDir) && fs.existsSync(abs) && abs.toLowerCase().endsWith('.ttf')) {
           fontPath = abs;
+          if (process.env.PUBLIC_BASE_URL) fontUrl = `${process.env.PUBLIC_BASE_URL}/fonts/${rel}`;
         }
       }
 
@@ -37,7 +39,7 @@ export function exportRouter(fontsDir?: string) {
       let file;
       if (format === 'txt') file = await exportTxt(filename, content);
       else if (format === 'docx') file = await exportDocx(filename, content, { fontFamily: font ? path.parse(font).name : undefined });
-      else if (format === 'pdf') file = await exportPdf(filename, content, { fontPath });
+      else if (format === 'pdf') file = await exportPdf(filename, content, { fontPath, fontUrl });
       else if (format === 'epub') file = await exportEpub(filename, content, { fontPath });
       else return res.status(400).json({ error: 'Unsupported format' });
       return res.json(file);
