@@ -100,9 +100,10 @@ async function start() {
   }
 }
 
-// In serverless (Vercel) we export the app; locally we start an HTTP server
+// Export default app for Vercel edge/serverless function
+export default app;
+
+// Allow local dev to run as a standalone server
 if (!process.env.VERCEL) {
   start();
 }
-
-export default app;
