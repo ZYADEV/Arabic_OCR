@@ -300,7 +300,7 @@ function App() {
               <h1 className="text-2xl font-bold">هدية من</h1>
               <div className="w-16 h-16 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-purple-600 p-1">
                 <img 
-                  src="/server/arabe_community/logo.jpg"
+                  src="/arabe_community/logo.jpg"
                   alt="Logo" 
                   className="w-full h-full rounded-full object-cover"
                 />
