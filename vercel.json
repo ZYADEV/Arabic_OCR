@@ -10,7 +10,13 @@
     },
     {
       "src": "server/src/index.ts",
-      "use": "@vercel/node"
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": [
+          "server/fonts/**",
+          "server/arabe_community/**"
+        ]
+      }
     }
   ],
   "routes": [
@@ -20,7 +26,7 @@
     },
     {
       "src": "/(.*)",
-      "dest": "/client/dist/$1"
+      "dest": "/client/dist/index.html"
     }
   ],
   "env": {

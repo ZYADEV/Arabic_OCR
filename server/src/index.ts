@@ -11,6 +11,7 @@ dotenv.config();
 
 const app = express();
 
+<<<<<<< HEAD
 // Enhanced CORS for production
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
@@ -18,13 +19,18 @@ app.use(cors({
     : true,
   credentials: true
 }));
+=======
+// CORS: allow same-origin and dev proxy; safe for serverless
+app.use(cors({ origin: true, credentials: true }));
+>>>>>>> d30b2c6 (Arabic OCR Server)
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // __dirname available under CommonJS transpilation.
 
-const UPLOAD_DIR = process.env.UPLOAD_DIR || 'uploads';
+// Use ephemeral /tmp on Vercel, persistent folder locally
+const UPLOAD_DIR = process.env.UPLOAD_DIR || (process.env.VERCEL ? '/tmp/uploads' : 'uploads');
 const absUpload = path.join(__dirname, '..', UPLOAD_DIR);
 const FONTS_DIR = path.join(__dirname, '..', 'fonts');
 if (!fs.existsSync(absUpload)) fs.mkdirSync(absUpload, { recursive: true });
@@ -99,4 +105,9 @@ async function start() {
   }
 }
 
-start();
+// In serverless (Vercel) we export the app; locally we start an HTTP server
+if (!process.env.VERCEL) {
+  start();
+}
+
+export default app;
