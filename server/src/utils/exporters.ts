@@ -4,6 +4,7 @@ import { AlignmentType, Document, Packer, Paragraph, TextRun } from 'docx';
 import Epub from 'epub-gen';
 import JSZip from 'jszip';
 import { v4 as uuidv4 } from 'uuid';
+import { generatePdfWithChromium } from './pdfGenerator';
 
 export type ExportResult = { filename: string; mime: string; base64: string };
 
@@ -62,190 +63,16 @@ interface PdfOptions { fontPath?: string }
 export async function exportPdf(basename: string, content: string, opts: PdfOptions = {}): Promise<ExportResult> {
   const filename = `${basename}-${uuidv4()}.pdf`;
 
-  // Prefer HTML → PDF through Chromium for correct Arabic shaping and RTL layout
-  const tryHtmlToPdf = async (): Promise<Buffer | null> => {
-    try {
-      // Use puppeteer-core + @sparticuz/chromium on serverless (Vercel),
-      // and full puppeteer locally.
-      const isServerless = Boolean(process.env.VERCEL || process.env.AWS_REGION || process.env.LAMBDA_TASK_ROOT);
-      console.log('[pdf] Running in serverless environment:', isServerless);
-      
-      // Use runtime ESM import via Function constructor to avoid bundler transforms
-      const dynamicImport: (s: string) => Promise<any> = new Function('s', 'return import(s)') as any;
-      
-      // Try multiple chromium entrypoints to satisfy different bundlers/runtimes
-      let chromium = null;
-      if (isServerless) {
-        try { 
-          const chromiumModule = await dynamicImport('@sparticuz/chromium');
-          chromium = chromiumModule.default || chromiumModule;
-          console.log('[pdf] Successfully imported @sparticuz/chromium');
-        } catch (e) {
-          console.log('[pdf] Failed to import @sparticuz/chromium:', e);
-          try { 
-            const chromiumModule = await dynamicImport('@sparticuz/chromium/build/cjs/index.cjs');
-            chromium = chromiumModule.default || chromiumModule;
-            console.log('[pdf] Successfully imported chromium CJS');
-          } catch (e2) {
-            console.log('[pdf] Failed to import chromium CJS:', e2);
-            console.log('[pdf] Will try puppeteer without chromium');
-          }
-        }
-      }
-
-      let puppeteer: any;
-      if (isServerless) {
-        try { 
-          const puppeteerModule = await dynamicImport('puppeteer-core');
-          puppeteer = puppeteerModule.default || puppeteerModule;
-          console.log('[pdf] Successfully imported puppeteer-core');
-        }
-        catch (err) {
-          console.log('[pdf] Failed to import puppeteer-core ESM:', err);
-          try {
-            // Try direct import without path manipulation
-            puppeteer = await dynamicImport('puppeteer-core');
-            if (puppeteer && typeof puppeteer.launch !== 'function') {
-              puppeteer = puppeteer.default || puppeteer.puppeteer;
-            }
-            console.log('[pdf] Successfully imported puppeteer-core (fallback)');
-          } catch (err2) {
-            console.log('[pdf] All puppeteer-core imports failed:', err2);
-            throw new Error('Could not import puppeteer-core in serverless environment');
-          }
-        }
-      } else {
-        try { 
-          const puppeteerModule = await dynamicImport('puppeteer');
-          puppeteer = puppeteerModule.default || puppeteerModule;
-          console.log('[pdf] Successfully imported puppeteer');
-        }
-        catch (err) {
-          console.log('[pdf] Failed to import puppeteer:', err);
-          throw new Error('Could not import puppeteer in local environment');
-        }
-      }
-      const fontPath = opts.fontPath;
-      
-      console.log(`[pdf] Using font path: ${fontPath}`);
-      
-      // Embed the font as base64 to guarantee availability regardless of file URL quirks
-      let fontCss = '';
-      if (fontPath) {
-        try {
-          const fsNative = await import('fs');
-          const b64 = fsNative.readFileSync(fontPath).toString('base64');
-          fontCss = `@font-face{font-family:"UserFont";src:url(data:font/ttf;base64,${b64}) format('truetype');font-weight:normal;font-style:normal;font-display:swap;}`;
-        } catch (e) {
-          console.warn('[pdf] Could not embed font, will fallback to Amiri/Cairo', e);
-        }
-      }
-      
-      // Build paragraphs by splitting on blank lines, and unwrap single newlines to avoid ragged lines
-      const blocks = content.split(/\n{2,}/).map(b => b.trim()).filter(Boolean);
-      const styledContent = blocks.map(block => {
-        const text = block.replace(/\n+/g, ' ').trim();
-        // Identify headers and apply appropriate styling (PDF-specific sizes)
-        if (text.includes('الفصل') || text.includes('الجزء') || text.includes('الباب')) {
-          return `<h1 style="font-size:24px;font-weight:bold;margin:24px 0 18px 0;line-height:1.4;">${text}</h1>`;
-        } else if (text.length < 80 && (text.includes(':') || /^[^\s]/.test(text))) {
-          return `<h2 style="font-size:18px;font-weight:bold;margin:18px 0 12px 0;line-height:1.4;">${text}</h2>`;
-        } else {
-          return `<p style="font-size:16px;margin:10px 0;line-height:1.9;text-align:justify;text-align-last:right;">${text}</p>`;
-        }
-      }).join('');
-      
-      const html = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
-        <style>
-          ${fontCss}
-          html,body{margin:0;padding:0;direction:rtl}
-          body{
-            text-align:right;
-            font-family:${fontPath ? `'UserFont',` : ''}'Amiri','Cairo',serif;
-            font-weight:normal;
-          }
-          h1,h2,h3,p{
-            text-align:right;
-            direction:rtl;
-            font-family:${fontPath ? `'UserFont',` : ''}'Amiri','Cairo',serif;
-            text-justify: inter-word;
-          }
-          @page{size:A4;margin:48px}
-        </style>
-      </head><body>${styledContent}</body></html>`;
-      
-      console.log(`[pdf] Generated HTML preview:`, html.substring(0, 500) + '...');
-      
-      // Validate puppeteer instance
-      if (!puppeteer || typeof puppeteer.launch !== 'function') {
-        throw new Error('Invalid puppeteer instance - launch method not found');
-      }
-      
-      console.log('[pdf] Puppeteer instance valid, launching browser...');
-      
-      const launchOptions: any = isServerless && chromium
-        ? {
-            args: [...(chromium?.args || []), '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-            defaultViewport: chromium?.defaultViewport,
-            executablePath: await chromium!.executablePath(),
-            headless: chromium?.headless !== undefined ? chromium.headless : true,
-          }
-        : isServerless
-        ? {
-            // Serverless without chromium - use basic options
-            headless: true,
-            args: [
-              '--no-sandbox', 
-              '--disable-setuid-sandbox', 
-              '--disable-dev-shm-usage',
-              '--disable-extensions',
-              '--disable-gpu',
-              '--single-process',
-              '--no-zygote'
-            ]
-          }
-        : {
-            // Local development
-            headless: 'new',
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-          };
-          
-      console.log('[pdf] Launch options:', JSON.stringify(launchOptions, null, 2));
-      
-      const browser = await puppeteer.launch(launchOptions);
-      console.log('[pdf] Browser launched successfully');
-      
-      const page = await browser.newPage();
-      console.log('[pdf] New page created');
-      
-      await page.setContent(html, { waitUntil: 'networkidle0' });
-      console.log('[pdf] HTML content set');
-      
-      // Wait for fonts to load
-      await page.evaluateHandle('document.fonts.ready');
-      console.log('[pdf] Fonts loaded');
-      
-      const pdfBuf: Buffer = await page.pdf({ 
-        format: 'A4', 
-        printBackground: true,
-        preferCSSPageSize: true
-      });
-      console.log('[pdf] PDF generated, size:', pdfBuf.length);
-      
-      await browser.close();
-      console.log('[pdf] Browser closed');
-      
-      return pdfBuf;
-    } catch (e) {
-      console.warn('[pdf] Puppeteer failed, falling back to pdf-lib:', e);
-      return null;
-    }
-  };
-
-  const htmlPdf = await tryHtmlToPdf();
-  if (htmlPdf) {
-    return { filename, mime: 'application/pdf', base64: Buffer.from(htmlPdf).toString('base64') };
+  // Try the alternative Chromium-based PDF generation first
+  console.log('[pdf] Attempting Chromium-based PDF generation...');
+  const chromiumPdf = await generatePdfWithChromium(content, opts.fontPath);
+  
+  if (chromiumPdf) {
+    console.log('[pdf] Chromium PDF generation successful');
+    return { filename, mime: 'application/pdf', base64: Buffer.from(chromiumPdf).toString('base64') };
   }
+
+  console.log('[pdf] Chromium PDF generation failed, falling back to pdf-lib...');
 
   // Fallback: pdf-lib (no complex shaping, basic RTL support only)
   const pdfDoc = await PDFDocument.create();
