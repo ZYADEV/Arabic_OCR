@@ -3,6 +3,7 @@ import fontkit from '@pdf-lib/fontkit';
 import { AlignmentType, Document, Packer, Paragraph, TextRun } from 'docx';
 import Epub from 'epub-gen';
 import JSZip from 'jszip';
+import { shapeArabicText } from './arabicShaper';
 import { v4 as uuidv4 } from 'uuid';
 import { generatePdfWithChromium } from './pdfGenerator';
 import { generateSimplePdf } from './simplePdf';
@@ -137,7 +138,7 @@ export async function exportPdf(basename: string, content: string, opts: PdfOpti
       y = height - marginY;
     }
     const hasArabic = /[\u0600-\u06FF]/.test(line);
-    const text = hasArabic ? (shape ? shape(line) : line.split('').reverse().join('')) : line;
+    const text = hasArabic ? shapeArabicText(line) : line;
     const lineWidth = embeddedFont ? embeddedFont.widthOfTextAtSize(text, fontSize) : text.length * fontSize * 0.55;
     const x = hasArabic ? width - marginX - lineWidth : marginX;
     try {
