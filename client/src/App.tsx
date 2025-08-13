@@ -176,8 +176,7 @@ function App() {
         rtl: true
       };
       const pdf = pdfMake.createPdf(doc);
-      pdf.getBuffer((buf: any) => {
-        const blob = new Blob([buf], { type: 'application/pdf' });
+      pdf.getBlob((blob: Blob) => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -222,12 +221,19 @@ function App() {
     return new Promise((resolve, reject) => {
       const w = window as any;
       if (w.pdfMake) return resolve(w.pdfMake);
+      let loaded = 0;
+      const onReady = () => {
+        const inst = (window as any).pdfMake;
+        if (inst && inst.createPdf) resolve(inst);
+        else reject(new Error('pdfMake not available'));
+      };
       const s1 = document.createElement('script');
       s1.src = 'https://cdn.jsdelivr.net/npm/pdfmake@0.2.10/build/pdfmake.min.js';
       const s2 = document.createElement('script');
       s2.src = 'https://cdn.jsdelivr.net/npm/pdfmake@0.2.10/build/vfs_fonts.js';
-      s1.onload = () => resolve((window as any).pdfMake);
-      s1.onerror = reject;
+      s1.onload = () => { loaded++; if (loaded >= 1) onReady(); };
+      s2.onload = () => { /* vfs_fonts optional since we embed our own font */ };
+      s1.onerror = reject; s2.onerror = () => {};
       document.head.appendChild(s1);
       document.head.appendChild(s2);
     });
