@@ -65,7 +65,14 @@ export async function exportPdf(basename: string, content: string, opts: PdfOpti
   // Prefer HTML → PDF through Chromium for correct Arabic shaping and RTL layout
   const tryHtmlToPdf = async (): Promise<Buffer | null> => {
     try {
-      const puppeteer = (await import('puppeteer')).default as any;
+      // Use puppeteer-core + @sparticuz/chromium on serverless (Vercel),
+      // and full puppeteer locally.
+      const isServerless = Boolean(process.env.VERCEL || process.env.AWS_REGION || process.env.LAMBDA_TASK_ROOT);
+      // Dynamic require to avoid type resolution during build
+      const chromium = isServerless ? (await (eval('import')('@sparticuz/chromium'))).default : null;
+      const puppeteer = isServerless
+        ? (await import('puppeteer-core')).default
+        : (await import('puppeteer')).default;
       const fontPath = opts.fontPath;
       
       console.log(`[pdf] Using font path: ${fontPath}`);
@@ -117,10 +124,18 @@ export async function exportPdf(basename: string, content: string, opts: PdfOpti
       
       console.log(`[pdf] Generated HTML preview:`, html.substring(0, 500) + '...');
       
-      const browser = await puppeteer.launch({ 
-        headless: 'new', 
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] 
-      });
+      const launchOptions: any = isServerless
+        ? {
+            args: [...(chromium?.args || []), '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+            defaultViewport: chromium?.defaultViewport,
+            executablePath: await chromium!.executablePath(),
+            headless: true,
+          }
+        : {
+            headless: 'new',
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+          };
+      const browser = await (puppeteer as any).launch(launchOptions);
       const page = await browser.newPage();
       await page.setContent(html, { waitUntil: 'networkidle0' });
       
