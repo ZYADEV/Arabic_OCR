@@ -1,0 +1,120 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Arabic-friendly defaults */
+:root {
+  --radius: 12px;
+}
+
+html, body {
+  font-feature-settings: "kern" 1, "liga" 1;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Theme tokens */
+.theme-light {
+  --bg: #EBEBEB;
+  --card: rgba(255,255,255,0.55);
+  --card-border: rgba(0,0,0,0.08);
+  --text: #141414;
+  --muted: rgba(20,20,20,0.6);
+}
+.theme-dark {
+  --bg: #141414;
+  --card: rgba(255,255,255,0.06);
+  --card-border: rgba(255,255,255,0.08);
+  --text: #EBEBEB;
+  --muted: rgba(235,235,235,0.7);
+}
+
+body.theme-light, body.theme-dark { background: var(--bg); color: var(--text); }
+
+pre {
+  direction: rtl;
+  white-space: pre-wrap;
+}
+
+/* Default app font falls back to Cairo if user font not chosen */
+body { font-family: var(--ui-font, 'Cairo', system-ui); }
+
+/* Glassmorphism cards */
+.glass {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  backdrop-filter: saturate(160%) blur(14px);
+  -webkit-backdrop-filter: saturate(160%) blur(14px);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+}
+
+/* Selection boxes with clear text */
+select.glass, .glass select {
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--card-border);
+}
+select.glass option, .glass select option {
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Header blur on scroll */
+.header-blur {
+  backdrop-filter: saturate(160%) blur(20px);
+  -webkit-backdrop-filter: saturate(160%) blur(20px);
+  background: rgba(235, 235, 235, 0.8);
+  border-bottom: 1px solid var(--card-border);
+}
+.theme-dark .header-blur {
+  background: rgba(20, 20, 20, 0.8);
+}
+
+/* Modal button improvements */
+.modal-btn-neutral {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  color: var(--text);
+}
+.modal-btn-primary {
+  background: #2563eb;
+  color: white;
+  border: 1px solid #2563eb;
+}
+
+/* Font card borders in light mode */
+.theme-light .font-card {
+  border: 1px solid #141414;
+}
+.theme-dark .font-card {
+  border: 1px solid var(--card-border);
+}
+
+/* Custom scrollbars to match theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--card);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--card-border);
+  border-radius: 4px;
+  border: 1px solid var(--card);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text);
+  opacity: 0.3;
+}
+
+/* Firefox scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--card-border) var(--card);
+}
