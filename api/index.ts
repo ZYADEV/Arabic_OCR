@@ -1,2 +1,4 @@
-export { default } from '../server/src/index';
+import app from '../server/src/index';
+
+export default app;
 
