@@ -22,7 +22,7 @@
     "jszip": "^3.10.1",
     "multer": "^1.4.5-lts.1",
     "pdf-lib": "^1.17.1",
-    "@sparticuz/chromium": "latest",
+    "@sparticuz/chromium": "^131.0.0",
     "puppeteer": "^21.3.8",
     "puppeteer-core": "^21.3.8",
     "uuid": "^9.0.1",
