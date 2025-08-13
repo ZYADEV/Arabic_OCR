@@ -10,9 +10,9 @@
     "dev": "concurrently \"npm:dev:server\" \"npm:dev:client\"",
     "dev:server": "npm --workspace server run dev",
     "dev:client": "npm --workspace client run dev",
-    "build": "npm --workspace server run build && npm --workspace client run build",
+    "build": "npm --workspace client run build",
     "start": "npm --workspace server start",
-    "vercel-build": "npm run build"
+    "vercel-build": "npm --workspace client run build"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
