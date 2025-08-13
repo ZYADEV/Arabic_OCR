@@ -10,6 +10,8 @@ interface OCRItem {
 }
 
 function App() {
+  // Point axios to server Vercel URL when provided
+  axios.defaults.baseURL = (import.meta as any).env?.VITE_API_BASE || '';
   const [files, setFiles] = useState<File[]>([]);
   const [results, setResults] = useState<OCRItem[]>([]);
   const [loading, setLoading] = useState(false);

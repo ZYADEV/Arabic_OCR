@@ -13,8 +13,8 @@ const app = express();
 
 // Enhanced CORS for production
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://ar-ocr.vercel.app/'] 
+  origin: process.env.NODE_ENV === 'production'
+    ? ['https://ar-ocr.vercel.app']
     : true,
   credentials: true
 }));
@@ -27,9 +27,15 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // Use ephemeral /tmp on Vercel, persistent folder locally
 const UPLOAD_DIR = process.env.UPLOAD_DIR || (process.env.VERCEL ? '/tmp/uploads' : 'uploads');
 const absUpload = path.join(__dirname, '..', UPLOAD_DIR);
-const FONTS_DIR = path.join(__dirname, '..', 'fonts');
+
+// Resolve fonts directory safely for serverless (read-only) runtime
+const FONTS_DIR = process.env.VERCEL
+  ? path.resolve(process.cwd(), 'fonts')
+  : path.join(__dirname, '..', 'fonts');
+
+// Create folders only when writable (i.e., not on Vercel read-only FS)
 if (!fs.existsSync(absUpload)) fs.mkdirSync(absUpload, { recursive: true });
-if (!fs.existsSync(FONTS_DIR)) fs.mkdirSync(FONTS_DIR, { recursive: true });
+if (!process.env.VERCEL && !fs.existsSync(FONTS_DIR)) fs.mkdirSync(FONTS_DIR, { recursive: true });
 
 // Static serve uploads for debugging (optional)
 app.use('/uploads', express.static(absUpload));
