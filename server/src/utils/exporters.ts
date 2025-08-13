@@ -68,11 +68,11 @@ export async function exportPdf(basename: string, content: string, opts: PdfOpti
       // Use puppeteer-core + @sparticuz/chromium on serverless (Vercel),
       // and full puppeteer locally.
       const isServerless = Boolean(process.env.VERCEL || process.env.AWS_REGION || process.env.LAMBDA_TASK_ROOT);
-      // Dynamic require to avoid type resolution during build
-      const chromium = isServerless ? (await (eval('import')('@sparticuz/chromium'))).default : null;
+      // Use runtime ESM import to avoid CJS require on ESM-only packages
+      const chromium = isServerless ? (await (eval('import'))('@sparticuz/chromium')).default : null;
       const puppeteer = isServerless
-        ? (await import('puppeteer-core')).default
-        : (await import('puppeteer')).default;
+        ? (await (eval('import'))('puppeteer-core')).default
+        : (await (eval('import'))('puppeteer')).default;
       const fontPath = opts.fontPath;
       
       console.log(`[pdf] Using font path: ${fontPath}`);
