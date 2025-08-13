@@ -102,13 +102,6 @@ export async function exportPdf(basename: string, content: string, opts: PdfOpti
   }
   // Extra shaping for Arabic in the pdf-lib fallback
   let shape: ((s: string) => string) | null = null;
-  try {
-    const bidi = await import('bidi-js');
-    shape = (s: string) => {
-      const bidiResult = (bidi as any).bidi(s, { isolate: true });
-      return bidiResult.text;
-    };
-  } catch {}
   let page = pdfDoc.addPage();
   let { width, height } = page.getSize();
   const maxLineWidth = width - marginX * 2;
