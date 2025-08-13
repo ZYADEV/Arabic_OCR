@@ -100,6 +100,17 @@ export async function exportPdf(basename: string, content: string, opts: PdfOpti
       console.warn('[pdf] Arabic font load failed, continuing with fallback shaping:', e);
     }
   }
+  // Extra shaping for Arabic in the pdf-lib fallback
+  let shape: ((s: string) => string) | null = null;
+  try {
+    const reshaper = await import('arabic-persian-reshaper');
+    const bidi = await import('bidi-js');
+    shape = (s: string) => {
+      const reshaped = (reshaper as any).reshape(s);
+      const bidiResult = (bidi as any).bidi(reshaped, { isolate: true });
+      return bidiResult.text;
+    };
+  } catch {}
   let page = pdfDoc.addPage();
   let { width, height } = page.getSize();
   const maxLineWidth = width - marginX * 2;
@@ -135,7 +146,7 @@ export async function exportPdf(basename: string, content: string, opts: PdfOpti
       y = height - marginY;
     }
     const hasArabic = /[\u0600-\u06FF]/.test(line);
-    const text = hasArabic ? line.split('').reverse().join('') : line;
+    const text = hasArabic ? (shape ? shape(line) : line.split('').reverse().join('')) : line;
     const lineWidth = embeddedFont ? embeddedFont.widthOfTextAtSize(text, fontSize) : text.length * fontSize * 0.55;
     const x = hasArabic ? width - marginX - lineWidth : marginX;
     try {
