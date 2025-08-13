@@ -127,7 +127,7 @@ function App() {
     }
   };
 
-  // Generate PDF on the client using html2pdf.js (loaded from CDN) with proper RTL and font embedding
+  // Generate PDF on the client; primary: pdfmake (RTL), fallback: html2pdf/print
   async function exportPdfClient(content: string, fontPath: string) {
     const base = (import.meta as any).env?.VITE_API_BASE || axios.defaults.baseURL || '';
     const absFontUrl = base ? `${base}${fontPath}` : fontPath;
@@ -140,55 +140,46 @@ function App() {
       await (document as any).fonts.ready;
     } catch {}
 
-    // Load html2pdf bundle dynamically
-    let html2pdf: any = null;
-    try { html2pdf = await loadHtml2Pdf(); } catch {}
-
-    // Build printable container
-    const container = document.createElement('div');
-    container.style.position = 'fixed';
-    container.style.left = '-10000px';
-    container.style.top = '0';
-    container.style.width = '794px'; // ~A4 width at 96dpi
-
-    // Build paragraphs (split on blank lines)
-    const paragraphs = content
-      .split(/\n{2,}/)
-      .map(p => p.trim())
-      .filter(Boolean)
-      .map(p => `<p>${p.replace(/\n+/g, ' ')}</p>`) // unwrap single newlines
-      .join('\n');
-
-    container.innerHTML = `
-      <div dir="rtl" style="direction:rtl;text-align:right;font-family: 'UserFont', 'Amiri', 'Cairo', serif; padding:24px;">
-        <style>
-          @page { size: A4; margin: 20mm; }
-          h1{font-size:24px;font-weight:700;margin:0 0 12px 0}
-          h2{font-size:18px;font-weight:700;margin:12px 0}
-          p{font-size:16px;line-height:1.9;margin:8px 0;text-align:justify;text-align-last:right}
-        </style>
-        ${paragraphs}
-      </div>`;
-    document.body.appendChild(container);
-
-    const opt: any = {
-      margin: [10, 10, 10, 10],
-      filename: `ocr-ar.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, allowTaint: false, backgroundColor: '#ffffff' },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    };
-
+    // Primary: pdfmake
     try {
-      if (!html2pdf) throw new Error('html2pdf not loaded');
-      await new Promise(r => requestAnimationFrame(r));
-      await html2pdf().set(opt).from(container).save();
-    } catch {
-      // Fallback: open printable window and use native print-to-PDF
-      await exportPdfViaPrint(container.innerHTML, absFontUrl);
-    } finally {
+      const pdfMake: any = await loadPdfMake();
+      const fontB64 = await fetchBase64(absFontUrl);
+      pdfMake.vfs = pdfMake.vfs || {};
+      pdfMake.vfs['UserFont.ttf'] = fontB64;
+      pdfMake.fonts = { UserFont: { normal: 'UserFont.ttf', bold: 'UserFont.ttf', italics: 'UserFont.ttf', bolditalics: 'UserFont.ttf' } };
+
+      const paragraphs = content
+        .split(/\n{2,}/)
+        .map(p => p.trim())
+        .filter(Boolean)
+        .map(p => ({ text: p.replace(/\n+/g, ' '), alignment: 'justify', margin: [0, 4, 0, 0] }));
+
+      const doc: any = {
+        pageSize: 'A4',
+        pageMargins: [28, 28, 28, 28],
+        defaultStyle: { font: 'UserFont', fontSize: 16, alignment: 'right' },
+        content: paragraphs.length ? paragraphs : [{ text: ' ' }],
+        rtl: true
+      };
+      pdfMake.createPdf(doc).download('ocr-ar.pdf');
+      return;
+    } catch {}
+
+    // Fallback: html2pdf if available, else print
+    try {
+      const html2pdf: any = await loadHtml2Pdf();
+      const container = document.createElement('div');
+      container.style.position = 'fixed';
+      container.style.left = '-10000px';
+      container.style.top = '0';
+      container.innerHTML = `<div dir=\"rtl\" style=\"direction:rtl;text-align:right;font-family:'UserFont','Amiri','Cairo',serif;padding:24px;font-size:16px;line-height:1.9\">${content.replace(/\n/g,'<br/>')}</div>`;
+      document.body.appendChild(container);
+      await html2pdf().from(container).save('ocr-ar.pdf');
       container.remove();
-    }
+      return;
+    } catch {}
+
+    await exportPdfViaPrint(`<div dir=\"rtl\" style=\"direction:rtl;text-align:right;font-size:16px;line-height:1.9\">${content.replace(/\n/g,'<br/>')}</div>`, absFontUrl);
   }
 
   function loadHtml2Pdf(): Promise<any> {
@@ -201,6 +192,28 @@ function App() {
       s.onerror = reject;
       document.head.appendChild(s);
     });
+  }
+  function loadPdfMake(): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const w = window as any;
+      if (w.pdfMake) return resolve(w.pdfMake);
+      const s1 = document.createElement('script');
+      s1.src = 'https://cdn.jsdelivr.net/npm/pdfmake@0.2.10/build/pdfmake.min.js';
+      const s2 = document.createElement('script');
+      s2.src = 'https://cdn.jsdelivr.net/npm/pdfmake@0.2.10/build/vfs_fonts.js';
+      s1.onload = () => resolve((window as any).pdfMake);
+      s1.onerror = reject;
+      document.head.appendChild(s1);
+      document.head.appendChild(s2);
+    });
+  }
+  async function fetchBase64(url: string): Promise<string> {
+    const res = await fetch(url, { mode: 'cors' });
+    const buf = await res.arrayBuffer();
+    let binary = '';
+    const bytes = new Uint8Array(buf);
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary);
   }
 
   async function exportPdfViaPrint(inner: string, fontUrl: string) {
