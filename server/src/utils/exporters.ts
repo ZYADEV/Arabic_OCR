@@ -6,7 +6,6 @@ import JSZip from 'jszip';
 import { v4 as uuidv4 } from 'uuid';
 import { generatePdfWithChromium } from './pdfGenerator';
 import { generateSimplePdf } from './simplePdf';
-import { generatePdfWithJsPdf, shapeArabicForPdfLib } from './jsPdfGenerator';
 
 export type ExportResult = { filename: string; mime: string; base64: string };
 
@@ -65,39 +64,24 @@ interface PdfOptions { fontPath?: string }
 export async function exportPdf(basename: string, content: string, opts: PdfOptions = {}): Promise<ExportResult> {
   const filename = `${basename}-${uuidv4()}.pdf`;
 
-  // Check if we should skip Chromium entirely (useful for debugging)
-  const skipChromium = process.env.SKIP_CHROMIUM === 'true';
+  // Try the alternative Chromium-based PDF generation first
+  console.log('[pdf] Attempting Chromium-based PDF generation...');
+  const chromiumPdf = await generatePdfWithChromium(content, opts.fontPath);
   
-  if (!skipChromium) {
-    // Try the alternative Chromium-based PDF generation first
-    console.log('[pdf] Attempting Chromium-based PDF generation...');
-    const chromiumPdf = await generatePdfWithChromium(content, opts.fontPath);
-    
-    if (chromiumPdf) {
-      console.log('[pdf] Chromium PDF generation successful');
-      return { filename, mime: 'application/pdf', base64: Buffer.from(chromiumPdf).toString('base64') };
-    }
-
-    console.log('[pdf] Chromium PDF generation failed, trying simple PDF generation...');
-    const simplePdf = await generateSimplePdf(content, opts.fontPath);
-    
-    if (simplePdf) {
-      console.log('[pdf] Simple PDF generation successful');
-      return { filename, mime: 'application/pdf', base64: Buffer.from(simplePdf).toString('base64') };
-    }
-  } else {
-    console.log('[pdf] Skipping Chromium PDF generation (SKIP_CHROMIUM=true)');
+  if (chromiumPdf) {
+    console.log('[pdf] Chromium PDF generation successful');
+    return { filename, mime: 'application/pdf', base64: Buffer.from(chromiumPdf).toString('base64') };
   }
 
-  console.log('[pdf] Trying jsPDF generation...');
-  const jsPdf = await generatePdfWithJsPdf(content, opts.fontPath);
+  console.log('[pdf] Chromium PDF generation failed, trying simple PDF generation...');
+  const simplePdf = await generateSimplePdf(content, opts.fontPath);
   
-  if (jsPdf) {
-    console.log('[pdf] jsPDF generation successful');
-    return { filename, mime: 'application/pdf', base64: Buffer.from(jsPdf).toString('base64') };
+  if (simplePdf) {
+    console.log('[pdf] Simple PDF generation successful');
+    return { filename, mime: 'application/pdf', base64: Buffer.from(simplePdf).toString('base64') };
   }
 
-  console.log('[pdf] All modern PDF approaches failed, falling back to pdf-lib...');
+  console.log('[pdf] All Chromium approaches failed, falling back to pdf-lib...');
 
   // Fallback: pdf-lib (no complex shaping, basic RTL support only)
   const pdfDoc = await PDFDocument.create();
@@ -116,7 +100,8 @@ export async function exportPdf(basename: string, content: string, opts: PdfOpti
       console.warn('[pdf] Arabic font load failed, continuing with fallback shaping:', e);
     }
   }
-  // pdf-lib fallback with basic RTL support
+  // Extra shaping for Arabic in the pdf-lib fallback
+  let shape: ((s: string) => string) | null = null;
   let page = pdfDoc.addPage();
   let { width, height } = page.getSize();
   const maxLineWidth = width - marginX * 2;
@@ -152,11 +137,11 @@ export async function exportPdf(basename: string, content: string, opts: PdfOpti
       y = height - marginY;
     }
     const hasArabic = /[\u0600-\u06FF]/.test(line);
-    const shaped = hasArabic ? shapeArabicForPdfLib(line) : line;
-    const lineWidth = embeddedFont ? embeddedFont.widthOfTextAtSize(shaped, fontSize) : shaped.length * fontSize * 0.55;
+    const text = hasArabic ? (shape ? shape(line) : line.split('').reverse().join('')) : line;
+    const lineWidth = embeddedFont ? embeddedFont.widthOfTextAtSize(text, fontSize) : text.length * fontSize * 0.55;
     const x = hasArabic ? width - marginX - lineWidth : marginX;
     try {
-      page.drawText(shaped, { x, y, size: fontSize, font: embeddedFont ?? undefined, color: rgb(0, 0, 0) });
+      page.drawText(text, { x, y, size: fontSize, font: embeddedFont ?? undefined, color: rgb(0, 0, 0) });
     } catch (e) {
       console.warn('[pdf] drawText error, skipping line:', e);
     }
