@@ -11,18 +11,13 @@ dotenv.config();
 
 const app = express();
 
-<<<<<<< HEAD
 // Enhanced CORS for production
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://ar-ocr.vercel.app/'] 
+    ? ['https://your-vercel-domain.app/'] 
     : true,
   credentials: true
 }));
-=======
-// CORS: allow same-origin and dev proxy; safe for serverless
-app.use(cors({ origin: true, credentials: true }));
->>>>>>> d30b2c6 (Arabic OCR Server)
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
