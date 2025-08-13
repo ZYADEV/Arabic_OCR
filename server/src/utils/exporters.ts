@@ -6,7 +6,7 @@ import JSZip from 'jszip';
 import { v4 as uuidv4 } from 'uuid';
 import { generatePdfWithChromium } from './pdfGenerator';
 import { generateSimplePdf } from './simplePdf';
-import { generatePdfWithJsPdf } from './jsPdfGenerator';
+import { generatePdfWithJsPdf, shapeArabicForPdfLib } from './jsPdfGenerator';
 
 export type ExportResult = { filename: string; mime: string; base64: string };
 
@@ -90,7 +90,7 @@ export async function exportPdf(basename: string, content: string, opts: PdfOpti
   }
 
   console.log('[pdf] Trying jsPDF generation...');
-  const jsPdf = await generatePdfWithJsPdf(content);
+  const jsPdf = await generatePdfWithJsPdf(content, opts.fontPath);
   
   if (jsPdf) {
     console.log('[pdf] jsPDF generation successful');
@@ -152,11 +152,11 @@ export async function exportPdf(basename: string, content: string, opts: PdfOpti
       y = height - marginY;
     }
     const hasArabic = /[\u0600-\u06FF]/.test(line);
-    const text = hasArabic ? line.split('').reverse().join('') : line;
-    const lineWidth = embeddedFont ? embeddedFont.widthOfTextAtSize(text, fontSize) : text.length * fontSize * 0.55;
+    const shaped = hasArabic ? shapeArabicForPdfLib(line) : line;
+    const lineWidth = embeddedFont ? embeddedFont.widthOfTextAtSize(shaped, fontSize) : shaped.length * fontSize * 0.55;
     const x = hasArabic ? width - marginX - lineWidth : marginX;
     try {
-      page.drawText(text, { x, y, size: fontSize, font: embeddedFont ?? undefined, color: rgb(0, 0, 0) });
+      page.drawText(shaped, { x, y, size: fontSize, font: embeddedFont ?? undefined, color: rgb(0, 0, 0) });
     } catch (e) {
       console.warn('[pdf] drawText error, skipping line:', e);
     }
