@@ -216,11 +216,8 @@ function App() {
 
       <footer className="text-center text-sm py-6">
         <div className="flex items-center justify-center gap-3">
-          <span style={{ color: 'var(--text)' }}>Build by YOUNESS</span>
-          <a href="https://twitter.com" target="_blank" className="hover:text-blue-500 transition-colors" style={{ color: 'var(--text)' }}>
-            <TwitterIcon className="w-6 h-6" />
-          </a>
-          <a href="https://github.com" target="_blank" className="hover:text-blue-500 transition-colors" style={{ color: 'var(--text)' }}>
+          <span style={{ color: 'var(--text)' }}>Build by ZYADEV</span>
+          <a href="https://github.com/ZYADEV/Arabic_OCR" target="_blank" className="hover:text-blue-500 transition-colors" style={{ color: 'var(--text)' }}>
             <GitHubIcon className="w-6 h-6" />
           </a>
         </div>
@@ -303,7 +300,7 @@ function App() {
               <h1 className="text-2xl font-bold">هدية من</h1>
               <div className="w-16 h-16 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-purple-600 p-1">
                 <img 
-                  src="/src/assets/logo.jpg" 
+                  src="arabe_community/logo.jpg" 
                   alt="Logo" 
                   className="w-full h-full rounded-full object-cover"
                 />
