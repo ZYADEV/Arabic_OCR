@@ -189,51 +189,27 @@ function App() {
       return;
     } catch {}
 
-    // Fallback: html2pdf if available, else print
-    try {
-      const html2pdf: any = await loadHtml2Pdf();
-      const container = document.createElement('div');
-      container.style.position = 'fixed';
-      container.style.left = '-10000px';
-      container.style.top = '0';
-      container.innerHTML = `<div dir=\"rtl\" style=\"direction:rtl;text-align:right;font-family:'UserFont','Amiri','Cairo',serif;padding:24px;font-size:16px;line-height:1.9\">${content.replace(/\n/g,'<br/>')}</div>`;
-      document.body.appendChild(container);
-      await html2pdf().from(container).save('ocr-ar.pdf');
-      container.remove();
-      return;
-    } catch {}
-
+    // Final fallback: native print window (never empty)
     await exportPdfViaPrint(`<div dir=\"rtl\" style=\"direction:rtl;text-align:right;font-size:16px;line-height:1.9\">${content.replace(/\n/g,'<br/>')}</div>`, absFontUrl);
   }
 
-  function loadHtml2Pdf(): Promise<any> {
-    return new Promise((resolve, reject) => {
-      const w = window as any;
-      if (w.html2pdf) return resolve(w.html2pdf);
-      const s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js';
-      s.onload = () => resolve((window as any).html2pdf);
-      s.onerror = reject;
-      document.head.appendChild(s);
-    });
-  }
+  function loadHtml2Pdf(): Promise<any> { return Promise.reject('disabled'); }
   function loadPdfMake(): Promise<any> {
     return new Promise((resolve, reject) => {
       const w = window as any;
       if (w.pdfMake) return resolve(w.pdfMake);
       let loaded = 0;
-      const onReady = () => {
+      const whenReady = () => {
         const inst = (window as any).pdfMake;
         if (inst && inst.createPdf) resolve(inst);
-        else reject(new Error('pdfMake not available'));
       };
       const s1 = document.createElement('script');
       s1.src = 'https://cdn.jsdelivr.net/npm/pdfmake@0.2.10/build/pdfmake.min.js';
       const s2 = document.createElement('script');
       s2.src = 'https://cdn.jsdelivr.net/npm/pdfmake@0.2.10/build/vfs_fonts.js';
-      s1.onload = () => { loaded++; if (loaded >= 1) onReady(); };
-      s2.onload = () => { /* vfs_fonts optional since we embed our own font */ };
-      s1.onerror = reject; s2.onerror = () => {};
+      s1.onload = () => { loaded++; setTimeout(whenReady, 50); };
+      s2.onload = () => { loaded++; setTimeout(whenReady, 50); };
+      s1.onerror = reject; s2.onerror = reject;
       document.head.appendChild(s1);
       document.head.appendChild(s2);
     });
