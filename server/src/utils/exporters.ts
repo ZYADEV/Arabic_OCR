@@ -70,7 +70,17 @@ export async function exportPdf(basename: string, content: string, opts: PdfOpti
       const isServerless = Boolean(process.env.VERCEL || process.env.AWS_REGION || process.env.LAMBDA_TASK_ROOT);
       // Use runtime ESM import via Function constructor to avoid bundler transforms
       const dynamicImport: (s: string) => Promise<any> = new Function('s', 'return import(s)') as any;
-      const chromium = isServerless ? (await dynamicImport('@sparticuz/chromium')).default : null;
+      // Try multiple chromium entrypoints to satisfy different bundlers/runtimes
+      const chromium = isServerless
+        ? (
+            (await (async () => {
+              try { return (await dynamicImport('@sparticuz/chromium')).default; } catch {}
+              try { return (await dynamicImport('@sparticuz/chromium/build/cjs/index.cjs')).default; } catch {}
+              try { return (await dynamicImport(process.cwd() + '/node_modules/@sparticuz/chromium/build/cjs/index.cjs')).default; } catch {}
+              return null as any;
+            })())
+          )
+        : null;
       const puppeteer = isServerless
         ? (await dynamicImport('puppeteer-core')).default
         : (await dynamicImport('puppeteer')).default;
@@ -125,7 +135,7 @@ export async function exportPdf(basename: string, content: string, opts: PdfOpti
       
       console.log(`[pdf] Generated HTML preview:`, html.substring(0, 500) + '...');
       
-      const launchOptions: any = isServerless
+      const launchOptions: any = isServerless && chromium
         ? {
             args: [...(chromium?.args || []), '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
             defaultViewport: chromium?.defaultViewport,
