@@ -7,7 +7,9 @@
       "config": {
         "includeFiles": [
           "fonts/**",
-          "arabe_community/**"
+          "arabe_community/**",
+          "node_modules/@sparticuz/chromium/**",
+          "node_modules/puppeteer-core/**"
         ]
       }
     }
