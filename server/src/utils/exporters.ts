@@ -3,7 +3,7 @@ import fontkit from '@pdf-lib/fontkit';
 import { AlignmentType, Document, Packer, Paragraph, TextRun } from 'docx';
 import Epub from 'epub-gen';
 import JSZip from 'jszip';
-import { shapeArabicText, sanitizeArabicText } from './arabicShaper';
+import { shapeArabicText } from './arabicShaper';
 import { v4 as uuidv4 } from 'uuid';
 import { generatePdfWithChromium } from './pdfGenerator';
 import { generateSimplePdf } from './simplePdf';
@@ -84,13 +84,12 @@ export async function exportPdf(basename: string, content: string, opts: PdfOpti
 
   console.log('[pdf] All Chromium approaches failed, falling back to pdf-lib...');
 
-  // Fallback: pdf-lib with manual Arabic shaping and full justification
+  // Fallback: pdf-lib (no complex shaping, basic RTL support only)
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit as any);
-  const fontSize = 16;
-  const lineGap = 6;
-  const marginX = 56;
-  const marginY = 56;
+  const fontSize = 12;
+  const marginX = 48;
+  const marginY = 48;
   let embeddedFont: any = null;
   const fontPath = opts.fontPath || process.env.ARABIC_TTF_PATH;
   if (fontPath) {
@@ -102,82 +101,53 @@ export async function exportPdf(basename: string, content: string, opts: PdfOpti
       console.warn('[pdf] Arabic font load failed, continuing with fallback shaping:', e);
     }
   }
-
-  const measure = (t: string) => (embeddedFont ? embeddedFont.widthOfTextAtSize(t, fontSize) : t.length * fontSize * 0.55);
-
-  const paragraphs = sanitizeArabicText(content)
-    .split(/\n{2,}/)
-    .map(p => p.trim())
-    .filter(Boolean)
-    .map(p => shapeArabicText(p));
-
+  // Extra shaping for Arabic in the pdf-lib fallback
+  let shape: ((s: string) => string) | null = null;
   let page = pdfDoc.addPage();
   let { width, height } = page.getSize();
   const maxLineWidth = width - marginX * 2;
-  let y = height - marginY;
-
-  const drawRtlJustified = (lineWords: string[], isLast: boolean) => {
-    const words = lineWords;
-    const widths = words.map(w => measure(w));
-    const textWidth = widths.reduce((a, b) => a + b, 0);
-    const gaps = Math.max(words.length - 1, 1);
-    const baseGap = embeddedFont ? embeddedFont.widthOfTextAtSize(' ', fontSize) : fontSize * 0.4;
-    let extra = 0;
-    if (!isLast && gaps > 0) {
-      const remaining = Math.max(maxLineWidth - (textWidth + baseGap * gaps), 0);
-      extra = remaining / gaps;
+  const sanitized = content.replace(/^#\s.+$/gm, '').replace(/\n{3,}/g, '\n\n');
+  const linesRaw = sanitized.split('\n');
+  const wrapped: string[] = [];
+  const measure = (t: string) => (embeddedFont ? embeddedFont.widthOfTextAtSize(t, fontSize) : t.length * fontSize * 0.55);
+  for (const raw of linesRaw) {
+    if (!raw.trim()) {
+      wrapped.push('');
+      continue;
     }
-    // Right-aligned start
-    let xCursor = width - marginX - (isLast ? textWidth + baseGap * gaps : maxLineWidth);
-    // Draw each word from right to left
-    for (let i = 0; i < words.length; i++) {
-      const idx = i; // words are already shaped RTL; draw in order but place from right by incrementing x
-      const w = words[idx];
-      const wWidth = widths[idx];
-      page.drawText(w, { x: xCursor, y, size: fontSize, font: embeddedFont ?? undefined, color: rgb(0, 0, 0) });
-      xCursor += wWidth + baseGap + extra;
+    if (measure(raw) <= maxLineWidth) {
+      wrapped.push(raw);
+      continue;
     }
-  };
-
-  for (const para of paragraphs) {
-    // Break paragraph into words (keep punctuation attached)
-    const tokens = para.split(/\s+/).filter(Boolean);
-    let line: string[] = [];
-    let lineWidth = 0;
-    for (const token of tokens) {
-      const w = token;
-      const wWidth = measure(w);
-      const spaceWidth = embeddedFont ? embeddedFont.widthOfTextAtSize(' ', fontSize) : fontSize * 0.4;
-      const additional = line.length ? spaceWidth : 0;
-      if (lineWidth + additional + wWidth <= maxLineWidth) {
-        line.push(w);
-        lineWidth += additional + wWidth;
-      } else {
-        if (y < marginY) {
-          page = pdfDoc.addPage();
-          ({ width, height } = page.getSize());
-          y = height - marginY;
-        }
-        drawRtlJustified(line, false);
-        y -= fontSize + lineGap;
-        line = [w];
-        lineWidth = wWidth;
+    let current = '';
+    for (const word of raw.split(/\s+/)) {
+      const next = current ? current + ' ' + word : word;
+      if (measure(next) <= maxLineWidth) current = next;
+      else {
+        if (current) wrapped.push(current);
+        current = word;
       }
     }
-    // Draw last line right-aligned (not justified)
-    if (line.length) {
-      if (y < marginY) {
-        page = pdfDoc.addPage();
-        ({ width, height } = page.getSize());
-        y = height - marginY;
-      }
-      drawRtlJustified(line, true);
-      y -= fontSize + lineGap;
-    }
-    // Paragraph spacing
-    y -= lineGap;
+    if (current) wrapped.push(current);
   }
-
+  let y = height - marginY;
+  for (const line of wrapped) {
+    if (y < marginY) {
+      page = pdfDoc.addPage();
+      ({ width, height } = page.getSize());
+      y = height - marginY;
+    }
+    const hasArabic = /[\u0600-\u06FF]/.test(line);
+    const text = hasArabic ? shapeArabicText(line) : line;
+    const lineWidth = embeddedFont ? embeddedFont.widthOfTextAtSize(text, fontSize) : text.length * fontSize * 0.55;
+    const x = hasArabic ? width - marginX - lineWidth : marginX;
+    try {
+      page.drawText(text, { x, y, size: fontSize, font: embeddedFont ?? undefined, color: rgb(0, 0, 0) });
+    } catch (e) {
+      console.warn('[pdf] drawText error, skipping line:', e);
+    }
+    y -= fontSize + 4;
+  }
   const pdfBytes = await pdfDoc.save();
   return { filename, mime: 'application/pdf', base64: Buffer.from(pdfBytes).toString('base64') };
 }

@@ -96,6 +96,11 @@ function App() {
       return;
     }
     try {
+      // Client-side HTML → PDF (avoids serverless headless browser limits)
+      if (format === 'pdf') {
+        await exportPdfClient(mergedText, selectedFont);
+        return;
+      }
       const { data } = await axios.post('/api/export/generate', {
         filename: 'ocr-ar',
         format,
@@ -121,6 +126,73 @@ function App() {
       alert('فشل التصدير: ' + (e?.message || ''));
     }
   };
+
+  // Generate PDF on the client using html2pdf.js (loaded from CDN) with proper RTL and font embedding
+  async function exportPdfClient(content: string, fontPath: string) {
+    const base = (import.meta as any).env?.VITE_API_BASE || axios.defaults.baseURL || '';
+    const absFontUrl = base ? `${base}${fontPath}` : fontPath;
+
+    // Load font explicitly so it's ready for html2canvas
+    try {
+      const ff = new FontFace('UserFont', `url(${absFontUrl})`);
+      await ff.load();
+      (document as any).fonts.add(ff);
+      await (document as any).fonts.ready;
+    } catch {}
+
+    // Load html2pdf bundle dynamically
+    const html2pdf = await loadHtml2Pdf();
+
+    // Build printable container
+    const container = document.createElement('div');
+    container.style.position = 'fixed';
+    container.style.left = '-10000px';
+    container.style.top = '0';
+    container.style.width = '794px'; // ~A4 width at 96dpi
+
+    // Build paragraphs (split on blank lines)
+    const paragraphs = content
+      .split(/\n{2,}/)
+      .map(p => p.trim())
+      .filter(Boolean)
+      .map(p => `<p>${p.replace(/\n+/g, ' ')}</p>`) // unwrap single newlines
+      .join('\n');
+
+    container.innerHTML = `
+      <div dir="rtl" style="direction:rtl;text-align:right;font-family: 'UserFont', 'Amiri', 'Cairo', serif; padding:24px;">
+        <style>
+          @page { size: A4; margin: 20mm; }
+          h1{font-size:24px;font-weight:700;margin:0 0 12px 0}
+          h2{font-size:18px;font-weight:700;margin:12px 0}
+          p{font-size:16px;line-height:1.9;margin:8px 0;text-align:justify;text-align-last:right}
+        </style>
+        ${paragraphs}
+      </div>`;
+    document.body.appendChild(container);
+
+    const opt: any = {
+      margin: [10, 10, 10, 10],
+      filename: `ocr-ar.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, allowTaint: false, backgroundColor: '#ffffff' },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    await html2pdf().set(opt).from(container).save();
+    container.remove();
+  }
+
+  function loadHtml2Pdf(): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const w = window as any;
+      if (w.html2pdf) return resolve(w.html2pdf);
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js';
+      s.onload = () => resolve((window as any).html2pdf);
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
 
   const [dark, setDark] = useState<boolean>(() => localStorage.getItem('theme') === 'dark');
   const [scrolled, setScrolled] = useState(false);

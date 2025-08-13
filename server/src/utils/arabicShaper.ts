@@ -110,21 +110,4 @@ export function shapeArabicText(input: string): string {
   return out.join('');
 }
 
-// Remove combining marks (tashkeel), tatweel and zero-width/control characters that render as boxes
-export function sanitizeArabicText(input: string): string {
-  return input
-    // Remove Arabic diacritics and Quranic annotation marks
-    .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '')
-    // Remove tatweel/kashida
-    .replace(/\u0640/g, '')
-    // Remove zero-width and bidi control marks that often leak from OCR
-    .replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, '')
-    // Normalize punctuation to Arabic glyphs
-    .replace(/\?/g, '؟')
-    .replace(/;/g, '؛')
-    // Collapse spaces
-    .replace(/\s{2,}/g, ' ')
-    .trim();
-}
-
 
