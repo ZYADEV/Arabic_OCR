@@ -67,12 +67,12 @@ export async function exportPdf(basename: string, content: string, opts: PdfOpti
   const filename = `${basename}-${uuidv4()}.pdf`;
 
   // Preferred: remote headless Chrome service (e.g., Browserless) if configured
-  const browserlessUrl = process.env.BROWSERLESS_URL; // e.g., https://chrome.browserless.io/pdf?token=XXXX
+  const browserlessUrl = process.env.BROWSERLESS_URL; // e.g., https://production-sfo.browserless.io/pdf?token=XXXX
   const publicBase = process.env.PUBLIC_BASE_URL || '';
   if (browserlessUrl) {
     try {
-      const fontUrl = opts.fontPath && publicBase ? `${publicBase}${opts.fontPath.replace(/^(?:https?:)?\/?\//,'')}` : undefined;
-      const html = buildRtlHtml(content, fontUrl);
+      const fontUrl = opts.fontPath && publicBase ? `${publicBase}${opts.fontPath}` : undefined;
+      const html = buildRtlHtmlStrict(content, fontUrl);
       const { data } = await axios.post(browserlessUrl, { html }, { responseType: 'arraybuffer', timeout: 30000 });
       if (data && (data as any).byteLength) {
         return { filename, mime: 'application/pdf', base64: Buffer.from(data as any).toString('base64') };
@@ -169,7 +169,7 @@ export async function exportPdf(basename: string, content: string, opts: PdfOpti
   return { filename, mime: 'application/pdf', base64: Buffer.from(pdfBytes).toString('base64') };
 }
 
-function buildRtlHtml(content: string, absFontUrl?: string) {
+function buildRtlHtmlStrict(content: string, absFontUrl?: string) {
   const blocks = content.split(/\n{2,}/).map(b => b.trim()).filter(Boolean);
   const nodes = blocks.map(b => {
     const t = b.replace(/\n+/g, ' ').trim();
@@ -183,8 +183,8 @@ function buildRtlHtml(content: string, absFontUrl?: string) {
     ${fontFace}
     html,body{margin:0;padding:0;direction:rtl}
     body{font-family:${absFontUrl ? `'UserFont',` : ''}'Amiri','Cairo',serif;text-align:right}
-    h1{font-size:22px;font-weight:700;margin:12px 0}
-    h2{font-size:18px;font-weight:700;margin:10px 0}
+    h1{font-size:22px;font-weight:700;margin:12px 0;text-align:right}
+    h2{font-size:18px;font-weight:700;margin:10px 0;text-align:right}
     p{font-size:14px;line-height:1.9;margin:8px 0;text-align:justify;text-align-last:right}
     @page{size:A4;margin:20mm}
   </style></head><body>${nodes}</body></html>`;
